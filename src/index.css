@@ -1,5 +1,24 @@
-@layer theme, base, antd, components, utilities;
-@import "tailwindcss";
+@layer theme,
+base,
+antd,
+components,
+utilities;
+
+body {
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+
+  --primary-color: #4B54D5;
+  --secondary-color: #F3F7FB;
+}
+
+/* @import "tailwindcss"; */
 
 /* :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
