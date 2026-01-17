@@ -4,10 +4,13 @@ import * as go from 'gojs';
 import { ReactDiagram } from 'gojs-react';
 import './DiagramWrapper.css';
 
+export type NodeData = { key: number; category: string; label: string };
+export type LinkData = { key: number; from: number; to: number; text?: string };
+
 interface DiagramProps {
-  nodeDataArray: Array<any>;
-  linkDataArray: Array<any>;
-  onModelChange: (e: any) => void;
+  nodeDataArray: Array<NodeData>;
+  linkDataArray: Array<LinkData>;
+  onModelChange: (nodes: NodeData[], links: LinkData[]) => void;
 }
 
 const initDiagram = () => {
@@ -206,6 +209,24 @@ const initDiagram = () => {
 };
 
 export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref) => {
+  const handleModelChange = (changes: go.IncrementalData) => {
+    console.log(changes);
+    // 1. Check if we have the Diagram reference
+    if (ref && 'current' in ref && ref.current) {
+      const diagram = ref.current.getDiagram();
+
+      if (diagram) {
+        // 2. Extract the FULL current state from the model
+        // We create a shallow copy to ensure React detects the change
+        const allNodes = diagram.model.nodeDataArray.slice();
+        const allLinks = (diagram.model as go.GraphLinksModel).linkDataArray.slice();
+
+        // 3. Send the full arrays back to parent
+        props.onModelChange(allNodes as NodeData[], allLinks as LinkData[]);
+      }
+    }
+  };
+
   return (
     <ReactDiagram
       ref={ref}
@@ -213,7 +234,7 @@ export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref
       initDiagram={initDiagram}
       nodeDataArray={props.nodeDataArray}
       linkDataArray={props.linkDataArray}
-      onModelChange={props.onModelChange}
+      onModelChange={handleModelChange}
     />
   );
 });

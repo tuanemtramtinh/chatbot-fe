@@ -92,7 +92,6 @@ function AppLayout() {
           <Footer
             style={{
               backgroundColor: 'var(--secondary-color)',
-              paddingTop: 16,
             }}
           >
             <Flex justify="center">
