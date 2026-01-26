@@ -19,6 +19,8 @@ const initDiagram = () => {
   // Initialize the Diagram
   const diagram = $(go.Diagram, {
     'undoManager.isEnabled': true, // Must be enabled for user editing
+    allowDrop: true,
+    'toolManager.mouseWheelBehavior': go.ToolManager.WheelZoom,
     // Force layout to push node apart
     layout: $(go.ForceDirectedLayout, {
       defaultSpringLength: 50,
@@ -61,8 +63,8 @@ const initDiagram = () => {
         maxSize: new go.Size(100, NaN),
         cursor: 'move',
       },
-      new go.Binding('text', 'label').makeTwoWay()
-    )
+      new go.Binding('text', 'label').makeTwoWay(),
+    ),
   );
 
   // Usecase template
@@ -93,8 +95,8 @@ const initDiagram = () => {
         maxSize: new go.Size(160, NaN),
         cursor: 'move',
       },
-      new go.Binding('text', 'label').makeTwoWay()
-    )
+      new go.Binding('text', 'label').makeTwoWay(),
+    ),
   );
 
   // SystemBox
@@ -117,8 +119,8 @@ const initDiagram = () => {
       // System Name Title
       $(go.TextBlock, { font: 'bold 12pt sans-serif', margin: 10 }, new go.Binding('text', 'label')),
       // The Placeholder holds the member Nodes (Use Cases)
-      $(go.Placeholder, { padding: 20 })
-    )
+      $(go.Placeholder, { padding: 20 }),
+    ),
   );
 
   // Mapping
@@ -166,7 +168,7 @@ const initDiagram = () => {
     makeButton('Xóa Link', (e) => {
       // const link = (obj.part as go.Adornment).adornedPart as go.Link;
       e.diagram.commandHandler.deleteSelection();
-    })
+    }),
   );
 
   // Relationship link template
@@ -192,7 +194,7 @@ const initDiagram = () => {
       { isPanelMain: true, strokeWidth: 1.5 },
       new go.Binding('stroke', 'text', (t) => (t ? '#555' : 'black')), // Include/Extend màu xám, thường màu đen
       // Nếu có text (include/extend) thì nét đứt [4, 2], không thì nét liền null
-      new go.Binding('strokeDashArray', 'text', (t) => (t === '<<include>>' || t === '<<extend>>' ? [4, 4] : null))
+      new go.Binding('strokeDashArray', 'text', (t) => (t === '<<include>>' || t === '<<extend>>' ? [4, 4] : null)),
     ),
     // Mũi tên
     $(go.Shape, { toArrow: 'OpenTriangle' }), // Mũi tên mở đặc trưng UML Use Case
@@ -201,8 +203,8 @@ const initDiagram = () => {
       go.Panel,
       'Auto',
       $(go.Shape, { fill: '#f4f6f8', stroke: null }),
-      $(go.TextBlock, { font: '9pt sans-serif', segmentIndex: 0, segmentOffset: new go.Point(NaN, NaN) }, new go.Binding('text', 'text'))
-    )
+      $(go.TextBlock, { font: '9pt sans-serif', segmentIndex: 0, segmentOffset: new go.Point(NaN, NaN) }, new go.Binding('text', 'text')),
+    ),
   );
 
   return diagram;

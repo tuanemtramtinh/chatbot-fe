@@ -83,13 +83,13 @@ function AppLayout() {
           <Content
             style={{
               backgroundColor: 'var(--secondary-color)',
-              height: 'calc(100vh - 64px - 79.2px)', // Viewport height minus header and footer
+              height: 'calc(100vh - 64px)', // Viewport height minus header and footer
               overflow: 'auto',
             }}
           >
             <Outlet />
           </Content>
-          <Footer
+          {/* <Footer
             style={{
               backgroundColor: 'var(--secondary-color)',
             }}
@@ -111,7 +111,7 @@ function AppLayout() {
                 <span>Chatbot có thể mắc sai sót, vì vậy, nhớ xác minh câu trả lời của Chatbot</span>
               </Flex>
             </Flex>
-          </Footer>
+          </Footer> */}
         </Layout>
       </Layout>
     </>

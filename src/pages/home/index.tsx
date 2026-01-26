@@ -10,6 +10,7 @@ import { DiagramWrapper, type NodeData, type LinkData } from '../../components/D
 import { useLocalChat } from '../../hooks/useLocalChat';
 import { useAgentStream } from '../../hooks/useAgentStream';
 import type { ReactDiagram } from 'gojs-react';
+import { DiagramPalette } from '../../components/DiagramPalette';
 
 type WorkflowPhase = 'input' | 'actor-review' | 'diagram-review' | 'scenario-review' | 'final';
 
@@ -97,7 +98,7 @@ export default function HomePage() {
           setDiagramLinks((prev) => [...prev, item.data as LinkData]);
         }
         index++;
-      }, 600);
+      }, 1);
       resolve();
     });
   };
@@ -193,15 +194,30 @@ export default function HomePage() {
         {phase === 'actor-review' && <ActorReview actors={actors} onUpdate={handleActorUpdate} onConfirm={handleActorConfirm} />}
 
         {phase === 'diagram-review' && (
-          <div style={{ position: 'relative', height: 'auto' }}>
-            <button
-              onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
-              style={{ position: 'absolute', zIndex: 1000, top: 20, right: 20, backgroundColor: 'green', color: 'white' }}
-            >
-              Confirm Diagram
-            </button>
+          <div style={{ display: 'flex', height: '490px', position: 'relative' }}>
+            {/* 2. SIDEBAR: Placed normally in flex flow */}
+            <DiagramPalette />
 
-            <div>
+            {/* 3. DIAGRAM AREA: Takes remaining width */}
+            <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
+              {/* Confirm Button Overlay */}
+              <button
+                onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
+                style={{
+                  position: 'absolute',
+                  zIndex: 10,
+                  top: 10,
+                  right: 10,
+                  backgroundColor: '#52c41a',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Confirm Diagram
+              </button>
               <DiagramWrapper ref={diagramRef} nodeDataArray={diagramNodes} linkDataArray={diagramLinks} onModelChange={handleDiagramUpdate} />
             </div>
           </div>
