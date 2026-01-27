@@ -20,8 +20,8 @@ function AppLayout() {
   return (
     <>
       <Layout style={{ minHeight: '100vh' }}>
-        <Sider style={{ backgroundColor: 'white' }} width={'15%'}>
-          <Flex vertical gap={'large'} style={{ height: '100%', padding: '16px' }}>
+        <Sider style={{ backgroundColor: 'white', position: 'relative' }} width={'15%'}>
+          <Flex vertical gap={'large'} style={{ height: '100%', padding: '16px', position: 'fixed' }}>
             <Flex style={{ display: 'flex', justifyContent: 'center' }}>
               <img src="../original.svg" alt="logo" />
             </Flex>
@@ -73,17 +73,11 @@ function AppLayout() {
           </Flex>
         </Sider>
         <Layout>
-          <Header
-            style={{
-              backgroundColor: 'var(--secondary-color)',
-            }}
-          >
-            Header
-          </Header>
+          <Header style={{ backgroundColor: 'var(--secondary-color)' }}>Header</Header>
           <Content
             style={{
               backgroundColor: 'var(--secondary-color)',
-              height: 'calc(100vh - 64px)', // Viewport height minus header and footer
+              // height: 'calc(100vh - 64px)', // Viewport height minus header and footer
               overflow: 'auto',
             }}
           >

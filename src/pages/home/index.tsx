@@ -32,23 +32,17 @@ export default function HomePage() {
           {
             id: '1',
             name: 'Warehouse Staff',
-            type: 'Person',
             description: 'Staff responsible for inventory management',
-            confidenceScore: 0.95,
           },
           {
             id: '2',
             name: 'Manager',
-            type: 'Person',
             description: 'Manager who approves inventory',
-            confidenceScore: 0.92,
           },
           {
             id: '3',
             name: 'Admin',
-            type: 'Person',
             description: 'Administrator role',
-            confidenceScore: 0.75, // Low confidence - should be highlighted
           },
         ];
         resolve(mockActors);
@@ -98,14 +92,10 @@ export default function HomePage() {
     }
   };
 
-  const handleActorUpdate = (updatedActors: Actor[]) => {
-    setActors(updatedActors);
-  };
-
-  const handleActorConfirm = async (confirmedActors: Actor[]) => {
+  const handleActorConfirm = async (candidates: Actor[], approved: Actor[]) => {
     setIsTyping(true);
     antdMessage.loading({ content: 'Đang tạo diagram...', key: 'generating', duration: 0 });
-    console.log(confirmedActors);
+    console.log(candidates, approved);
 
     try {
       await simulateDiagramGeneration();
@@ -164,7 +154,7 @@ export default function HomePage() {
           </Flex>
         )}
 
-        {phase === 'actor-review' && <ActorReview actors={actors} onUpdate={handleActorUpdate} onConfirm={handleActorConfirm} />}
+        {phase === 'actor-review' && <ActorReview actors={actors} onConfirm={handleActorConfirm} />}
 
         {phase === 'diagram-scenario-review' && (
           <div style={{ display: 'flex', height: '490px', position: 'relative' }}>

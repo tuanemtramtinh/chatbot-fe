@@ -1,35 +1,105 @@
+// Guide:
+// Format_def for sentence type format
+// All field are required
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/StructuredInput.tsx
-import { Input, Form, Button, Flex, Typography, Select, Card, Divider } from 'antd';
+import { Input, Form, Button, Flex, Typography, Select, Card, Divider, Tooltip } from 'antd';
 import { useState } from 'react';
 import { KeywordSuggester } from './KeywordSuggester';
-import { validateNonActor } from '../utils/nonActorValidator';
-import { DeleteOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, SendOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import Paragraph from 'antd/es/typography/Paragraph';
+import { validateNonActor } from '../utils/nonActorValidator';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
 
-interface SvoBlock {
+// --- 1. CONFIGURATION: Define your Sentence Structures here ---
+type InputType = 'text' | 'select' | 'textarea' | 'suggester';
+
+interface FieldConfig {
+  key: string;
+  label?: string; // Prefix label (e.g., "As", "Given")
+  placeholder: string;
+  type: InputType;
+  options?: string[]; // For 'select' type
+  width?: string | number;
+  rows?: number; // For 'textarea'
+}
+
+interface FormatDefinition {
+  label: string;
+  fields: FieldConfig[];
+  template: (values: Record<string, string>) => string;
+}
+
+const FORMAT_DEFS: Record<string, FormatDefinition> = {
+  user_story: {
+    label: 'User Story',
+    fields: [
+      { key: 'article', label: 'As', type: 'select', options: ['a', 'an', 'the'], width: 70, placeholder: '-' },
+      { key: 'actor', type: 'text', placeholder: 'Actor (e.g. User)', width: '25%' },
+      { key: 'action', label: 'I want to', type: 'suggester', placeholder: 'Action (e.g. login)' },
+      { key: 'benefit', label: 'so that', type: 'textarea', placeholder: 'Benefit (e.g. access data)', rows: 1 },
+    ],
+    template: (v) => `As ${v.article} ${v.actor}, I want to ${v.action} so that ${v.benefit}.`,
+  },
+  system_req: {
+    label: 'System Requirement',
+    fields: [
+      { key: 'actor', label: 'The', type: 'text', placeholder: 'System/Component', width: '40%' },
+      { key: 'action', label: 'shall', type: 'suggester', placeholder: 'Function/Behavior (e.g. validate input)' },
+    ],
+    template: (v) => `The ${v.actor} shall ${v.action}.`,
+  },
+  gherkin: {
+    label: 'Gherkin (Scenario)',
+    fields: [
+      { key: 'given', label: 'Given', type: 'text', placeholder: 'Precondition (e.g. User is logged in)' },
+      { key: 'when', label: 'When', type: 'text', placeholder: 'Event (e.g. User clicks save)' },
+      { key: 'then', label: 'Then', type: 'textarea', placeholder: 'Result (e.g. Data is saved)', rows: 2 },
+    ],
+    template: (v) => `Given ${v.given}, When ${v.when}, Then ${v.then}.`,
+  },
+};
+
+// --- TYPES ---
+
+interface Block {
   id: string;
-  article: string;
-  actor: string;
-  goal: string;
-  benefit: string;
-  actorError?: string;
-  goalError?: string;
-  benefitError?: string;
+  format: keyof typeof FORMAT_DEFS;
+  values: Record<string, string>; // Stores dynamic values like { actor: 'User', action: 'Login' }
+  errors: Record<string, string>; // Stores errors per field
 }
 
 interface StructuredInputProps {
-  onSubmit: (fullText: string, blocks: SvoBlock[]) => void;
+  onSubmit: (fullText: string, blocks: any[]) => void;
   isSubmitting?: boolean;
 }
 
 export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps) => {
-  const [blocks, setBlocks] = useState<SvoBlock[]>(() => [{ id: Date.now().toString(), article: 'a', actor: '', goal: '', benefit: '' }]);
+  // Initialize with one default User Story block
+  const [blocks, setBlocks] = useState<Block[]>(() => [
+    {
+      id: Date.now().toString(),
+      format: 'user_story',
+      values: { article: 'a', actor: '', action: '', benefit: '' }, // Initial defaults
+      errors: {},
+    },
+  ]);
+
+  // --- ACTIONS ---
 
   const handleAddBlock = () => {
-    setBlocks((prev) => [...prev, { id: Date.now().toString(), article: 'a', actor: '', goal: '', benefit: '' }]);
+    setBlocks((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        format: 'user_story',
+        values: { article: 'a', actor: '', action: '', benefit: '' },
+        errors: {},
+      },
+    ]);
   };
 
   const handleRemoveBlock = (id: string) => {
@@ -38,140 +108,256 @@ export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps
     }
   };
 
-  const updateBlock = (id: string, field: keyof SvoBlock, value: string) => {
+  const handleFormatChange = (id: string, newFormat: string) => {
     setBlocks((prev) =>
       prev.map((block) => {
         if (block.id !== id) return block;
-        const updatedBlock = { ...block, [field]: value };
-        if (field === 'actor') {
-          const validation = validateNonActor(value);
-          updatedBlock.actorError = validation.isValid ? '' : validation.error || '';
-        } else if (field === 'goal') {
-          updatedBlock.goalError = value.trim() ? '' : 'Goal không được để trống';
-        } else if (field === 'benefit') {
-          updatedBlock.benefitError = value.trim() ? '' : 'Benefit không được để trống';
+
+        // When format changes, reset values to empty strings based on new fields
+        const newFields = FORMAT_DEFS[newFormat].fields;
+        const newValues: Record<string, string> = {};
+        newFields.forEach((f) => {
+          // Keep existing value if key matches (e.g. 'actor' might persist), else reset
+          newValues[f.key] = block.values[f.key] || (f.key === 'article' ? 'a' : '');
+        });
+
+        return { ...block, format: newFormat, values: newValues, errors: {} };
+      }),
+    );
+  };
+
+  const updateValue = (id: string, fieldKey: string, value: string) => {
+    setBlocks((prev) =>
+      prev.map((block) => {
+        if (block.id !== id) return block;
+
+        const newValues = { ...block.values, [fieldKey]: value };
+        const newErrors = { ...block.errors };
+
+        // 1. Basic Required Check
+        if (!value.trim()) {
+          newErrors[fieldKey] = 'This field is required';
+        } else {
+          delete newErrors[fieldKey];
         }
 
-        return updatedBlock;
-      })
+        // 2. Specific Validation for "Actor" fields
+        if (fieldKey === 'actor' && value.trim()) {
+          const val = validateNonActor(value);
+          if (!val.isValid) {
+            newErrors[fieldKey] = val.error || 'Invalid actor';
+          }
+        }
+
+        return { ...block, values: newValues, errors: newErrors };
+      }),
     );
   };
 
   const handleSubmit = () => {
-    let hasError = false;
-    const validatedBlocks = blocks.map((block) => {
-      const actorVal = validateNonActor(block.actor);
-      if (!actorVal.isValid) hasError = true;
-      if (!block.goal.trim() || !block.benefit.trim()) hasError = true;
+    let hasGlobalError = false;
 
-      return {
-        ...block,
-        actorError: actorVal.isValid ? undefined : actorVal.error || '',
-        goalError: !block.goal.trim() ? 'Goal không được để trống' : '',
-        benefitError: !block.benefit.trim() ? 'Benefit không được để trống' : '',
-      };
+    const validatedBlocks = blocks.map((block) => {
+      const def = FORMAT_DEFS[block.format];
+      const newErrors: Record<string, string> = {};
+
+      // Validate ALL fields defined in the current format
+      def.fields.forEach((field) => {
+        const val = block.values[field.key] || '';
+
+        if (!val.trim()) {
+          newErrors[field.key] = 'Required';
+          hasGlobalError = true;
+        }
+
+        if (field.key === 'actor') {
+          const v = validateNonActor(val);
+          if (!v.isValid) {
+            newErrors[field.key] = v.error || 'Invalid';
+            hasGlobalError = true;
+          }
+        }
+      });
+
+      return { ...block, errors: newErrors };
     });
-    if (hasError) {
+
+    if (hasGlobalError) {
       setBlocks(validatedBlocks);
       return;
     }
-    // Generate Paragraph
-    const fullParagraph = blocks.map((b) => `As ${b.article} ${b.actor}, I want to ${b.goal} so that ${b.benefit}.`).join(' ');
 
-    onSubmit(fullParagraph, blocks);
+    // Generate Full Paragraph
+    const fullParagraph = blocks.map((b) => FORMAT_DEFS[b.format].template(b.values)).join(' ');
+
+    // Flatten data for the parent (optional: clean up structure)
+    const payload = blocks.map((b) => ({
+      id: b.id,
+      format: b.format,
+      ...b.values,
+    }));
+
+    onSubmit(fullParagraph, payload);
   };
 
-  // Helper to check if form is valid for enabling the button
-  const isValid = blocks.every((b) => b.actor.trim() && b.goal.trim() && b.benefit.trim() && !b.actorError);
+  const isValid = blocks.every((b) => Object.keys(b.errors).length === 0 && Object.values(b.values).every((v) => v.trim()));
+
+  // --- RENDER HELPERS ---
+  const renderInput = (block: Block, field: FieldConfig) => {
+    const value = block.values[field.key] || '';
+    const error = block.errors[field.key];
+    const status = error ? 'error' : '';
+
+    const commonStyle = { flex: 1, minWidth: '120px' };
+
+    switch (field.type) {
+      case 'select':
+        return (
+          <Select
+            value={value}
+            onChange={(val) => updateValue(block.id, field.key, val)}
+            style={{ width: field.width || 80 }}
+            disabled={isSubmitting}
+            status={status}
+          >
+            {field.options?.map((opt) => (
+              <Option key={opt} value={opt}>
+                {opt}
+              </Option>
+            ))}
+          </Select>
+        );
+      case 'suggester':
+        return (
+          <div style={commonStyle}>
+            <KeywordSuggester
+              value={value}
+              onChange={(val) => updateValue(block.id, field.key, val)}
+              placeholder={field.placeholder}
+              isSubmitting={isSubmitting}
+            />
+          </div>
+        );
+      case 'textarea':
+        return (
+          <Input.TextArea
+            value={value}
+            onChange={(e) => updateValue(block.id, field.key, e.target.value)}
+            placeholder={field.placeholder}
+            autoSize={{ minRows: field.rows || 1, maxRows: 3 }}
+            status={status}
+            disabled={isSubmitting}
+            style={commonStyle}
+          />
+        );
+      case 'text':
+      default:
+        return (
+          <Input
+            value={value}
+            onChange={(e) => updateValue(block.id, field.key, e.target.value)}
+            placeholder={field.placeholder}
+            status={status}
+            disabled={isSubmitting}
+            style={{ width: field.width || undefined, ...commonStyle }}
+          />
+        );
+    }
+  };
 
   return (
-    <Form layout="vertical" style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-      <Title level={5} style={{ marginBottom: '16px' }}>
-        Nhập theo cấu trúc: "As a/an/the &lt;actor&gt;, I want to &lt;goal&gt; so that &lt;benefit&gt;"
-      </Title>
+    <Form
+      layout="vertical"
+      style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
+      <Flex justify="space-between" align="center" style={{ marginBottom: '16px' }}>
+        <Title level={5} style={{ margin: 0 }}>
+          User Stories
+        </Title>
+        <Tooltip title="Select a sentences format and fill all required fields.">
+          <InfoCircleOutlined style={{ color: '#1890ff' }} />
+        </Tooltip>
+      </Flex>
 
-      {blocks.map((block, index) => (
-        <Card
-          key={block.id}
-          size="small"
-          style={{ marginBottom: '12px', borderColor: block.actorError ? '#ffa39e' : undefined }}
-          title={
-            <Text strong style={{ color: '#1890ff' }}>
-              Sentence #{index + 1}
-            </Text>
-          }
-          extra={
-            blocks.length > 1 && <Button type="text" danger icon={<DeleteOutlined />} disabled={isSubmitting} onClick={() => handleRemoveBlock(block.id)} />
-          }
-        >
-          <Form.Item style={{ marginBottom: 8 }} validateStatus={block.actorError ? 'error' : ''} help={block.actorError}>
-            <Flex gap="small">
-              <span style={{ minWidth: 20 }}>As</span>
-              <Select value={block.article} onChange={(val) => updateBlock(block.id, 'article', val)} style={{ width: 70 }} disabled={isSubmitting}>
-                <Option value="a">a</Option>
-                <Option value="an">an</Option>
-                <Option value="the">the</Option>
-              </Select>
-              <Input
-                placeholder="Actor (e.g. User)"
-                value={block.actor}
-                onChange={(e) => updateBlock(block.id, 'actor', e.target.value)}
-                status={block.actorError ? 'error' : ''}
-                disabled={isSubmitting}
-              />
-            </Flex>
-          </Form.Item>
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+        {blocks.map((block, index) => {
+          const formatDef = FORMAT_DEFS[block.format];
 
-          <Form.Item style={{ marginBottom: 8 }} validateStatus={block.goalError ? 'error' : ''} help={block.goalError}>
-            <Flex gap="small" align="center">
-              <span style={{ minWidth: 60 }}>I want to</span>
-              <div style={{ flex: 1 }}>
-                <KeywordSuggester
-                  value={block.goal}
-                  onChange={(val) => updateBlock(block.id, 'goal', val)}
-                  placeholder="Goal (e.g. login)"
-                  isSubmitting={isSubmitting}
-                />
-              </div>
-            </Flex>
-          </Form.Item>
+          return (
+            <Card
+              key={block.id}
+              size="small"
+              style={{ marginBottom: '12px', borderColor: Object.keys(block.errors).length ? '#ffa39e' : undefined }}
+              title={
+                <Flex justify="space-between" align="center">
+                  <Text strong style={{ color: '#1890ff' }}>
+                    Sentence #{index + 1}
+                  </Text>
+                  <Select
+                    value={block.format}
+                    onChange={(val) => handleFormatChange(block.id, val)}
+                    size="small"
+                    style={{ width: 180 }}
+                    disabled={isSubmitting}
+                  >
+                    {Object.entries(FORMAT_DEFS).map(([key, def]) => (
+                      <Option key={key} value={key}>
+                        {def.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </Flex>
+              }
+              extra={
+                blocks.length > 1 && <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleRemoveBlock(block.id)} disabled={isSubmitting} />
+              }
+            >
+              {/* DYNAMIC FIELD RENDERING */}
+              {formatDef.fields.map((field) => (
+                <Form.Item key={field.key} style={{ marginBottom: 8 }} validateStatus={block.errors[field.key] ? 'error' : ''} help={block.errors[field.key]}>
+                  <Flex gap="small" align={field.type === 'textarea' ? 'start' : 'center'}>
+                    {field.label && (
+                      <span
+                        style={{
+                          minWidth: field.label.length > 10 ? 'auto' : 60,
+                          fontWeight: 500,
+                          marginTop: field.type === 'textarea' ? 5 : 0,
+                        }}
+                      >
+                        {field.label}
+                      </span>
+                    )}
+                    {renderInput(block, field)}
+                  </Flex>
+                </Form.Item>
+              ))}
+            </Card>
+          );
+        })}
 
-          <Form.Item style={{ marginBottom: 0 }} validateStatus={block.benefitError ? 'error' : ''} help={block.benefitError}>
-            <Flex gap="small" align="center">
-              <span style={{ minWidth: 60 }}>so that</span>
-              <Input.TextArea
-                autoSize={{ minRows: 1, maxRows: 3 }}
-                placeholder="Benefit"
-                value={block.benefit}
-                onChange={(e) => updateBlock(block.id, 'benefit', e.target.value)}
-                disabled={isSubmitting}
-                style={{ flex: 1 }}
-              />
-            </Flex>
-          </Form.Item>
-        </Card>
-      ))}
-      <Button disabled={isSubmitting} type="dashed" block icon={<PlusOutlined />} onClick={handleAddBlock} style={{ marginBottom: '16px' }}>
-        Add Another Sentence
-      </Button>
+        <Button disabled={isSubmitting} type="dashed" block icon={<PlusOutlined />} onClick={handleAddBlock} style={{ marginBottom: '16px' }}>
+          Add Sentence
+        </Button>
+      </div>
+
       <Divider style={{ margin: '12px 0' }} />
 
       <div style={{ backgroundColor: 'white', padding: '12px', borderRadius: '4px', marginBottom: '12px', border: '1px solid #f0f0f0' }}>
         <Text type="secondary" style={{ fontSize: '12px' }}>
-          Live Preview:
+          Preview:
         </Text>
-        <Paragraph ellipsis={{ rows: 3, expandable: true, symbol: 'more' }} style={{ margin: 0, color: '#4B54D5' }}>
+        <Paragraph style={{ margin: 0, color: '#4B54D5' }}>
           {blocks.map((b, i) => (
             <span key={i}>
-              As {b.article} <strong>{b.actor || '...'}</strong>, I want to <strong>{b.goal || '...'}</strong> so that <strong>{b.benefit || '...'}</strong>
-              .&nbsp;
+              {/* Using the template function to render the preview */}
+              {FORMAT_DEFS[b.format].template(b.values)}&nbsp;
             </span>
           ))}
         </Paragraph>
       </div>
 
       <Button type="primary" icon={<SendOutlined />} onClick={handleSubmit} disabled={!isValid || isSubmitting} loading={isSubmitting} block size="large">
-        Submit Input
+        Submit Stories
       </Button>
     </Form>
   );

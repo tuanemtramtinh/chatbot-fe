@@ -1,201 +1,286 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/ActorReview.tsx
-import { Table, Button, Space, Typography, message as antdMessage, Popconfirm, Input } from 'antd';
-import { DeleteOutlined, MergeCellsOutlined, PlusOutlined } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
+import { Table, Button, Space, Typography, message as antdMessage, Popconfirm, Input, Card, Badge, Tooltip } from 'antd';
+import { DeleteOutlined, MergeCellsOutlined, PlusOutlined, CheckOutlined, UndoOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { useEffect, useState, useRef } from 'react';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 export interface Actor {
   id: string;
   name: string;
-  type: 'Person' | 'System';
   description?: string;
-  confidenceScore: number;
+  status?: 'candidate' | 'approved';
 }
 
 interface ActorReviewProps {
   actors: Actor[];
-  onUpdate: (actors: Actor[]) => void;
-  onConfirm: (actors: Actor[]) => void;
+  onConfirm: (candidates: Actor[], approved: Actor[]) => void;
 }
 
-export const ActorReview = ({ actors: initialActors, onUpdate, onConfirm }: ActorReviewProps) => {
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [actors, setActors] = useState<Actor[]>(initialActors);
-
+export const ActorReview = ({ actors: initialActors, onConfirm }: ActorReviewProps) => {
+  // --- STATE ---
+  const [candidates, setCandidates] = useState<Actor[]>([]);
+  const [approved, setApproved] = useState<Actor[]>([]);
+  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<React.Key[]>([]);
+  // Use Ref to prevent cascading renders (only load initial data once)
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    setActors(initialActors);
+    // Only load if we have data and haven't initialized yet
+    if (initialActors.length > 0 && !hasInitialized.current) {
+      const incomingCandidates = initialActors.filter((a) => a.status !== 'approved');
+      const incomingApproved = initialActors.filter((a) => a.status === 'approved');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCandidates(incomingCandidates);
+      setApproved(incomingApproved);
+      hasInitialized.current = true;
+    }
   }, [initialActors]);
 
-  const handleDelete = (id: string) => {
-    const newActors = actors.filter((actor) => actor.id !== id);
-    setActors(newActors);
-    const newSelectedKeys = selectedRowKeys.filter((key) => key !== id);
-    setSelectedRowKeys(newSelectedKeys);
-    onUpdate(newActors);
+  const updateLists = (newCandidates: Actor[], newApproved: Actor[]) => {
+    setCandidates(newCandidates);
+    setApproved(newApproved);
+  };
+
+  // --- ACTIONS ---
+  const handleApprove = (id: string) => {
+    const actorToMove = candidates.find((a) => a.id === id);
+    if (actorToMove) {
+      const newCandidates = candidates.filter((a) => a.id !== id);
+      const newApproved = [...approved, actorToMove];
+
+      setSelectedCandidateKeys((prev) => prev.filter((k) => k !== id));
+      updateLists(newCandidates, newApproved);
+      antdMessage.success('Đã duyệt Actor');
+    }
+  };
+
+  const handleRevert = (id: string) => {
+    const actorToMove = approved.find((a) => a.id === id);
+    if (actorToMove) {
+      const newApproved = approved.filter((a) => a.id !== id);
+      const newCandidates = [...candidates, actorToMove];
+
+      updateLists(newCandidates, newApproved);
+    }
+  };
+
+  const handleApproveAll = () => {
+    const newApproved = [...approved, ...candidates];
+    setSelectedCandidateKeys([]);
+    updateLists([], newApproved);
+    antdMessage.success('Đã duyệt tất cả');
+  };
+
+  const handleDelete = (id: string, listType: 'candidate' | 'approved') => {
+    if (listType === 'candidate') {
+      const newCandidates = candidates.filter((a) => a.id !== id);
+      setSelectedCandidateKeys((prev) => prev.filter((k) => k !== id));
+      updateLists(newCandidates, approved);
+    } else {
+      const newApproved = approved.filter((a) => a.id !== id);
+      updateLists(candidates, newApproved);
+    }
     antdMessage.success('Đã xóa Actor');
   };
 
-  const handleAdd = () => {
+  const handleAddCandidate = () => {
     const newActor: Actor = {
       id: Date.now().toString(),
       name: `New Actor`,
-      type: 'Person',
       description: '',
-      confidenceScore: 1.0,
     };
-    const newActors = [...actors, newActor];
-    setActors(newActors);
-    onUpdate(newActors);
+    const newCandidates = [...candidates, newActor];
+    updateLists(newCandidates, approved);
   };
 
-  const handleFieldChange = (id: string, field: keyof Actor, value: any) => {
-    const newActors = actors.map((actor) => {
-      if (actor.id === id) {
-        return { ...actor, [field]: value };
-      }
-      return actor;
-    });
-    setActors(newActors);
-    onUpdate(newActors);
+  const handleFieldChange = (id: string, field: keyof Actor, value: any, listType: 'candidate' | 'approved') => {
+    if (listType === 'candidate') {
+      const newCandidates = candidates.map((a) => (a.id === id ? { ...a, [field]: value } : a));
+      updateLists(newCandidates, approved);
+    } else {
+      const newApproved = approved.map((a) => (a.id === id ? { ...a, [field]: value } : a));
+      updateLists(candidates, newApproved);
+    }
   };
 
-  const handleMerge = () => {
-    if (selectedRowKeys.length < 2) {
-      antdMessage.warning('Vui lòng chọn ít nhất 2 Actor để gộp');
+  const handleMergeCandidates = () => {
+    if (selectedCandidateKeys.length < 2) {
+      antdMessage.warning('Chọn ít nhất 2 Actor để gộp');
       return;
     }
 
-    const selectedActors = actors.filter((actor) => selectedRowKeys.includes(actor.id));
+    const selectedActors = candidates.filter((actor) => selectedCandidateKeys.includes(actor.id));
     const firstActor = selectedActors[0];
     const mergedNames = selectedActors.map((a) => a.name).join(' / ');
 
-    // Create merged actor with highest confidence
     const mergedActor: Actor = {
       id: firstActor.id,
       name: mergedNames,
-      type: firstActor.type,
       description: selectedActors
         .map((a) => a.description)
         .filter(Boolean)
         .join('; '),
-      confidenceScore: Math.max(...selectedActors.map((a) => a.confidenceScore)),
     };
 
-    // Remove selected actors and add merged one
-    const newActors = [...actors.filter((actor) => !selectedRowKeys.includes(actor.id)), mergedActor];
+    const newCandidates = [...candidates.filter((actor) => !selectedCandidateKeys.includes(actor.id)), mergedActor];
 
-    setActors(newActors);
-    setSelectedRowKeys([]);
-    onUpdate(newActors);
-    antdMessage.success('Đã gộp Actors thành công');
+    setSelectedCandidateKeys([]);
+    updateLists(newCandidates, approved);
+    antdMessage.success('Đã gộp thành công');
   };
 
-  const columns = [
+  // --- COLUMNS ---
+  const renderInput = (text: string, record: Actor, field: keyof Actor, listType: 'candidate' | 'approved') =>
+    field === 'description' ? (
+      <Input.TextArea
+        value={text}
+        onChange={(e) => handleFieldChange(record.id, field, e.target.value, listType)}
+        variant="borderless"
+        autoSize={{ minRows: 1, maxRows: 3 }}
+        style={{ padding: 0, resize: 'none', fontSize: '13px', color: '#666' }}
+        placeholder="Add description..."
+      />
+    ) : (
+      <Input
+        value={text}
+        onChange={(e) => handleFieldChange(record.id, field, e.target.value, listType)}
+        variant="borderless"
+        placeholder="Actor Name"
+        style={{ padding: 0, fontWeight: 500 }}
+      />
+    );
+
+  const candidateColumns = [
     {
-      title: 'Tên Actor',
+      title: 'Tên Actor (Candidates)',
       dataIndex: 'name',
       key: 'name',
-      sorter: (a: Actor, b: Actor) => a.name.localeCompare(b.name),
-      render: (text: string, record: Actor) => (
-        <Input value={text} onChange={(e) => handleFieldChange(record.id, 'name', e.target.value)} variant="borderless" style={{ padding: 0 }} />
-      ),
+      width: '30%',
+      render: (text: string, record: Actor) => renderInput(text, record, 'name', 'candidate'),
     },
-    // {
-    //   title: 'Loại',
-    //   dataIndex: 'type',
-    //   key: 'type',
-    //   render: (type: string) => <Tag color={type === 'Person' ? 'blue' : 'purple'}>{type}</Tag>,
-    // },
     {
       title: 'Mô tả',
       dataIndex: 'description',
       key: 'description',
-      render: (text: string, record: Actor) => (
-        <Input.TextArea
-          value={text}
-          onChange={(e) => handleFieldChange(record.id, 'description', e.target.value)}
-          variant="borderless"
-          autoSize={{ minRows: 1, maxRows: 3 }}
-          style={{ padding: 0, resize: 'none' }}
-        />
-      ),
+      render: (text: string, record: Actor) => renderInput(text, record, 'description', 'candidate'),
     },
-    // {
-    //   title: 'Điểm tin cậy',
-    //   dataIndex: 'confidenceScore',
-    //   key: 'confidenceScore',
-    //   sorter: (a: Actor, b: Actor) => a.confidenceScore - b.confidenceScore,
-    //   render: (score: number) => {
-    //     const color = score < 0.8 ? 'warning' : 'success';
-    //     return <Tag color={color}>{(score * 100).toFixed(0)}%</Tag>;
-    //   },
-    // },
     {
       title: 'Hành động',
       key: 'action',
+      width: '10%',
       render: (_: any, record: Actor) => (
-        <Popconfirm title="Bạn có chắc muốn xóa Actor này?" onConfirm={() => handleDelete(record.id)} okText="Xóa" cancelText="Hủy">
-          <Button type="text" danger icon={<DeleteOutlined />} size="small">
-            Từ chối/Xóa
-          </Button>
-        </Popconfirm>
+        <Space>
+          <Tooltip title="Approve">
+            <Button type="link" size="small" shape="circle" icon={<CheckOutlined />} onClick={() => handleApprove(record.id)} />
+          </Tooltip>
+          <Popconfirm title="Delete?" onConfirm={() => handleDelete(record.id, 'candidate')}>
+            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
 
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (keys: React.Key[]) => {
-      setSelectedRowKeys(keys);
+  const approvedColumns = [
+    {
+      title: 'Tên Actor (Approved)',
+      dataIndex: 'name',
+      key: 'name',
+      width: '30%',
+      render: (text: string, record: Actor) => renderInput(text, record, 'name', 'approved'),
     },
-  };
-
-  // const rowClassName = (record: Actor) => {
-  //   return record.confidenceScore < 0.8 ? 'low-confidence-row' : '';
-  // };
+    {
+      title: 'Mô tả',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string, record: Actor) => renderInput(text, record, 'description', 'approved'),
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      width: '10%',
+      render: (_: any, record: Actor) => (
+        <Space>
+          <Tooltip title="Revert">
+            <Button size="small" type="link" icon={<UndoOutlined />} onClick={() => handleRevert(record.id)} />
+          </Tooltip>
+          <Popconfirm title="Delete?" onConfirm={() => handleDelete(record.id, 'approved')}>
+            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
-    <div style={{ padding: '16px' }}>
-      <Title level={4} style={{ marginBottom: '16px' }}>
-        Actor Review
-      </Title>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Space style={{ marginBottom: '16px' }}>
-          <Button type="primary" icon={<MergeCellsOutlined />} onClick={handleMerge} disabled={selectedRowKeys.length < 2}>
-            Gộp đã chọn ({selectedRowKeys.length})
-          </Button>
-          <Button type="dashed" icon={<PlusOutlined />} onClick={handleAdd}>
-            Thêm Actor
-          </Button>
-        </Space>
-        <Button type="primary" onClick={() => onConfirm(actors)} disabled={actors.length === 0}>
-          Xác nhận và tiếp tục
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Title level={4} style={{ margin: 0 }}>
+          Review & Approve Actors
+        </Title>
+        <Button type="primary" size="middle" onClick={() => onConfirm(candidates, approved)} disabled={approved.length === 0}>
+          Confirm Approved ({approved.length}) & Continue
         </Button>
       </div>
 
-      <Table
-        rowSelection={rowSelection}
-        columns={columns}
-        dataSource={actors}
-        rowKey="id"
-        // rowClassName={rowClassName}
-        pagination={{ pageSize: 10 }}
-        style={{
-          backgroundColor: 'white',
-        }}
-      />
+      {/* --- TABLE 1: CANDIDATES --- */}
+      <Card
+        size="small"
+        title={
+          <Space>
+            <Badge status="warning" />
+            <Text strong>Candidates</Text>
+            <Badge count={candidates.length} style={{ backgroundColor: '#faad14' }} />
+          </Space>
+        }
+        extra={
+          <Space style={{ padding: 10 }}>
+            <Button type="text" icon={<MergeCellsOutlined />} onClick={handleMergeCandidates} disabled={selectedCandidateKeys.length < 2}>
+              Merge
+            </Button>
+            <Button type="text" icon={<ArrowDownOutlined />} onClick={handleApproveAll} disabled={candidates.length === 0}>
+              Approve All
+            </Button>
+            <Button type="dashed" size="middle" icon={<PlusOutlined />} onClick={handleAddCandidate}>
+              Add
+            </Button>
+          </Space>
+        }
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px' }}
+        styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
+      >
+        <Table
+          rowSelection={{
+            selectedRowKeys: selectedCandidateKeys,
+            onChange: setSelectedCandidateKeys,
+          }}
+          columns={candidateColumns}
+          dataSource={candidates}
+          rowKey="id"
+          pagination={false}
+        />
+      </Card>
 
-      <style>{`
-        .low-confidence-row {
-          background-color: #fffbe6 !important;
+      <div style={{ textAlign: 'center', color: '#1890ff' }}>
+        <ArrowDownOutlined style={{ fontSize: '24px' }} />
+      </div>
+
+      {/* --- TABLE 2: APPROVED --- */}
+      <Card
+        size="small"
+        title={
+          <Space>
+            <Badge status="success" />
+            <Text strong>Approved</Text>
+            <Badge count={approved.length} style={{ backgroundColor: '#52c41a' }} />
+          </Space>
         }
-        .low-confidence-row:hover {
-          background-color: #fff9e6 !important;
-        }
-      `}</style>
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '200px', border: '1px solid #b7eb8f' }}
+        styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
+      >
+        <Table columns={approvedColumns} dataSource={approved} rowKey="id" pagination={false} locale={{ emptyText: 'No actors approved yet.' }} />
+      </Card>
     </div>
   );
 };
