@@ -4,7 +4,7 @@ import * as go from 'gojs';
 import { ReactDiagram } from 'gojs-react';
 import './DiagramWrapper.css';
 
-export type NodeData = { key: number; category: string; label: string };
+export type NodeData = { key: number; category?: string; label: string; isGroup?: boolean; group?: number; loc?: string };
 export type LinkData = { key: number; from: number; to: number; text?: string };
 
 interface DiagramProps {

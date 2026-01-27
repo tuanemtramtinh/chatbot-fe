@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/pages/home/index.tsx
 import { useRef, useState } from 'react';
@@ -12,7 +11,7 @@ import { useAgentStream } from '../../hooks/useAgentStream';
 import type { ReactDiagram } from 'gojs-react';
 import { DiagramPalette } from '../../components/DiagramPalette';
 
-type WorkflowPhase = 'input' | 'actor-review' | 'diagram-review' | 'scenario-review' | 'final';
+type WorkflowPhase = 'input' | 'actor-review' | 'diagram-scenario-review' | 'scenario-review' | 'final';
 
 export default function HomePage() {
   const [phase, setPhase] = useState<WorkflowPhase>('input');
@@ -58,47 +57,22 @@ export default function HomePage() {
   };
 
   // Simulate diagram generation from actors
-  const simulateDiagramGeneration = (confirmedActors: Actor[]): Promise<void> => {
+  const simulateDiagramGeneration = (): Promise<void> => {
     return new Promise((resolve) => {
-      const streamSequence = [
-        { type: 'node', data: { key: -99, label: 'Inventory Management System', isGroup: true } },
-        // 1. Create Actors
-        { type: 'node', data: { key: 1, category: 'Actor', label: 'Warehouse Staff' } },
-        { type: 'node', data: { key: 2, category: 'Actor', label: 'Manager' } },
-
-        // 2. Create Use Cases
-        { type: 'node', data: { key: 3, category: 'Usecase', label: 'Scan RFID Tag', group: -99 } },
-        { type: 'node', data: { key: 4, category: 'Usecase', label: 'Create Check Sheet', group: -99 } },
-        { type: 'node', data: { key: 5, category: 'Usecase', label: 'Approve Inventory', group: -99 } },
-
-        // 3. Create Links (Associations)
-        // Staff -> Scan RFID
-        { type: 'link', data: { key: -1, from: 1, to: 3 } },
-        // Staff -> Create Sheet
-        { type: 'link', data: { key: -2, from: 1, to: 4 } },
-
-        // Include relationship: Creating a sheet <<includes>> Scanning RFID
-        { type: 'link', data: { key: -3, from: 4, to: 3, text: '<<include>>' } },
-
-        // Manager -> Approve
-        { type: 'link', data: { key: -4, from: 2, to: 5 } },
-      ];
-
-      let index = 0;
-      const interval = setInterval(() => {
-        if (index >= streamSequence.length) {
-          clearInterval(interval);
-          return;
-        }
-
-        const item = streamSequence[index];
-        if (item.type === 'node') {
-          setDiagramNodes((prev) => [...prev, item.data as NodeData]);
-        } else {
-          setDiagramLinks((prev) => [...prev, item.data as LinkData]);
-        }
-        index++;
-      }, 1);
+      setDiagramNodes([
+        { key: -99, label: 'Inventory Management System', isGroup: true },
+        { key: 1, category: 'Actor', label: 'Warehouse Staff' },
+        { key: 2, category: 'Actor', label: 'Manager' },
+        { key: 3, category: 'Usecase', label: 'Scan RFID Tag', group: -99 },
+        { key: 4, category: 'Usecase', label: 'Create Check Sheet', group: -99 },
+        { key: 5, category: 'Usecase', label: 'Approve Inventory', group: -99 },
+      ]);
+      setDiagramLinks([
+        { key: -1, from: 1, to: 3 },
+        { key: -2, from: 1, to: 4 },
+        { key: -3, from: 4, to: 3, text: '<<include>>' },
+        { key: -4, from: 2, to: 5 },
+      ]);
       resolve();
     });
   };
@@ -131,12 +105,12 @@ export default function HomePage() {
   const handleActorConfirm = async (confirmedActors: Actor[]) => {
     setIsTyping(true);
     antdMessage.loading({ content: 'Đang tạo diagram...', key: 'generating', duration: 0 });
-    console.log(actors);
+    console.log(confirmedActors);
 
     try {
-      await simulateDiagramGeneration(confirmedActors);
+      await simulateDiagramGeneration();
       antdMessage.success({ content: 'Đã tạo diagram!', key: 'generating' });
-      setPhase('diagram-review');
+      setPhase('diagram-scenario-review');
     } catch {
       antdMessage.error({ content: 'Có lỗi xảy ra khi tạo diagram', key: 'generating' });
     } finally {
@@ -166,12 +140,11 @@ export default function HomePage() {
   const steps = [
     { title: 'Nhập yêu cầu', content: 'Nhập theo format' },
     { title: 'Actor Review', content: 'Xem và chỉnh sửa actors' },
-    { title: 'Diagram Review', content: 'Xem và chỉnh sửa diagram' },
-    { title: 'Scenario Review', content: 'Xem và chỉnh sửa description' },
+    { title: 'Diagram & Scenario Review', content: 'Xem và chỉnh sửa diagram và scenario' },
     { title: 'Hoàn thành', content: 'Kết quả cuối cùng' },
   ];
 
-  const currentStep = phase === 'input' ? 0 : phase === 'actor-review' ? 1 : phase === 'diagram-review' ? 2 : 3;
+  const currentStep = phase === 'input' ? 0 : phase === 'actor-review' ? 1 : phase === 'diagram-scenario-review' ? 2 : 3;
 
   return (
     <Flex vertical style={{ height: '100%', padding: '24px' }}>
@@ -193,12 +166,9 @@ export default function HomePage() {
 
         {phase === 'actor-review' && <ActorReview actors={actors} onUpdate={handleActorUpdate} onConfirm={handleActorConfirm} />}
 
-        {phase === 'diagram-review' && (
+        {phase === 'diagram-scenario-review' && (
           <div style={{ display: 'flex', height: '490px', position: 'relative' }}>
-            {/* 2. SIDEBAR: Placed normally in flex flow */}
             <DiagramPalette />
-
-            {/* 3. DIAGRAM AREA: Takes remaining width */}
             <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
               {/* Confirm Button Overlay */}
               <button

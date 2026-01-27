@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/components/ActorReview.tsx
-import { Table, Button, Tag, Space, Typography, message as antdMessage, Popconfirm, Input } from 'antd';
+import { Table, Button, Space, Typography, message as antdMessage, Popconfirm, Input } from 'antd';
 import { DeleteOutlined, MergeCellsOutlined, PlusOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 
