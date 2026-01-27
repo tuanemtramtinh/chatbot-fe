@@ -10,6 +10,7 @@ import { useLocalChat } from '../../hooks/useLocalChat';
 import { useAgentStream } from '../../hooks/useAgentStream';
 import type { ReactDiagram } from 'gojs-react';
 import { DiagramPalette } from '../../components/DiagramPalette';
+import { UseCaseDetailEditor, type UseCaseDetail } from '../../components/ScenarioReview';
 
 type WorkflowPhase = 'input' | 'actor-review' | 'diagram-scenario-review' | 'scenario-review' | 'final';
 
@@ -19,6 +20,8 @@ export default function HomePage() {
   const [diagramNodes, setDiagramNodes] = useState<NodeData[]>([]);
   const [diagramLinks, setDiagramLinks] = useState<LinkData[]>([]);
   const diagramRef = useRef<ReactDiagram>(null);
+  const [useCaseDetails, setUseCaseDetails] = useState<Record<number, UseCaseDetail>>({});
+  const [selectedUseCaseId, setSelectedUseCaseId] = useState<number | null>(null);
   const { isTyping, setIsTyping, createNewConversation } = useLocalChat();
   const { isBlocking } = useAgentStream();
 
@@ -53,20 +56,37 @@ export default function HomePage() {
   // Simulate diagram generation from actors
   const simulateDiagramGeneration = (): Promise<void> => {
     return new Promise((resolve) => {
-      setDiagramNodes([
+      const nodes: NodeData[] = [
         { key: -99, label: 'Inventory Management System', isGroup: true },
         { key: 1, category: 'Actor', label: 'Warehouse Staff' },
         { key: 2, category: 'Actor', label: 'Manager' },
         { key: 3, category: 'Usecase', label: 'Scan RFID Tag', group: -99 },
         { key: 4, category: 'Usecase', label: 'Create Check Sheet', group: -99 },
         { key: 5, category: 'Usecase', label: 'Approve Inventory', group: -99 },
-      ]);
+      ];
+      setDiagramNodes(nodes);
       setDiagramLinks([
         { key: -1, from: 1, to: 3 },
         { key: -2, from: 1, to: 4 },
         { key: -3, from: 4, to: 3, text: '<<include>>' },
         { key: -4, from: 2, to: 5 },
       ]);
+      const initialDetails: Record<number, UseCaseDetail> = {};
+      nodes.forEach((node) => {
+        if (node.category === 'Usecase') {
+          initialDetails[node.key] = {
+            id: node.key,
+            name: node.label,
+            actors: 'Warehouse Staff', // Simplified logic
+            description: `User wants to ${node.label} to ensure inventory accuracy.`,
+            preconditions: 'User is logged into the system.',
+            postconditions: 'Data is saved successfully.',
+            mainFlow: '1. User selects action.\n2. System validates.\n3. System performs action.',
+            alternativeFlow: '3a. If validation fails, show error.',
+          };
+        }
+      });
+      setUseCaseDetails(initialDetails);
       resolve();
     });
   };
@@ -114,9 +134,65 @@ export default function HomePage() {
   };
 
   const handleDiagramConfirm = (finalNodes: NodeData[], finalLinks: LinkData[]) => {
+    // 1. Create a copy of current details
+    const finalDetails = { ...useCaseDetails };
+
+    // 2. Loop through all nodes to check for missing details
+    finalNodes.forEach((node) => {
+      if (node.category === 'Usecase' && !finalDetails[node.key]) {
+        // Fill in the gap for unclicked nodes
+        finalDetails[node.key] = {
+          id: node.key,
+          name: node.label,
+          actors: '',
+          description: '',
+          preconditions: '',
+          postconditions: '',
+          mainFlow: '',
+          alternativeFlow: '',
+        };
+      }
+    });
     console.log(finalNodes, finalLinks);
+    console.log(finalDetails);
     // setPhase('scenario-review');
     antdMessage.success('Đã hoàn thành workflow!');
+  };
+
+  // Handle Selection
+  const handleNodeSelect = (key: number | null) => {
+    setSelectedUseCaseId(key);
+
+    // If a new node is dragged in (doesn't exist in details yet), create default data
+    if (key !== null && !useCaseDetails[key]) {
+      const node = diagramNodes.find((n) => n.key === key);
+      if (node) {
+        setUseCaseDetails((prev) => ({
+          ...prev,
+          [key]: {
+            id: key,
+            name: node.label,
+            actors: '',
+            description: '',
+            preconditions: '',
+            postconditions: '',
+            mainFlow: '',
+            alternativeFlow: '',
+          },
+        }));
+      }
+    }
+  };
+
+  // Handle Detail Updates (Typing in the table)
+  const handleDetailUpdate = (updated: UseCaseDetail) => {
+    setUseCaseDetails((prev) => ({ ...prev, [updated.id]: updated }));
+
+    // Optional: Sync Name change back to Diagram Node Label
+    const node = diagramNodes.find((n) => n.key === updated.id);
+    if (node && node.label !== updated.name) {
+      setDiagramNodes((prev) => prev.map((n) => (n.key === updated.id ? { ...n, label: updated.name } : n)));
+    }
   };
 
   const handleNewConversation = () => {
@@ -124,6 +200,8 @@ export default function HomePage() {
     setActors([]);
     setDiagramNodes([]);
     setDiagramLinks([]);
+    setSelectedUseCaseId(null);
+    setUseCaseDetails([]);
     createNewConversation();
   };
 
@@ -157,28 +235,41 @@ export default function HomePage() {
         {phase === 'actor-review' && <ActorReview actors={actors} onConfirm={handleActorConfirm} />}
 
         {phase === 'diagram-scenario-review' && (
-          <div style={{ display: 'flex', height: '490px', position: 'relative' }}>
-            <DiagramPalette />
-            <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
-              {/* Confirm Button Overlay */}
-              <button
-                onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
-                style={{
-                  position: 'absolute',
-                  zIndex: 10,
-                  top: 10,
-                  right: 10,
-                  backgroundColor: '#52c41a',
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                Confirm Diagram
-              </button>
-              <DiagramWrapper ref={diagramRef} nodeDataArray={diagramNodes} linkDataArray={diagramLinks} onModelChange={handleDiagramUpdate} />
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Top Half: Diagram */}
+            <div style={{ display: 'flex', height: '500px', position: 'relative' }}>
+              <DiagramPalette />
+              <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
+                <button
+                  onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
+                  style={{
+                    position: 'absolute',
+                    zIndex: 10,
+                    top: 10,
+                    right: 10,
+                    backgroundColor: '#52c41a',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Confirm Diagram
+                </button>
+                <DiagramWrapper
+                  ref={diagramRef}
+                  nodeDataArray={diagramNodes}
+                  linkDataArray={diagramLinks}
+                  onModelChange={handleDiagramUpdate}
+                  onNodeSelect={handleNodeSelect} // <--- Pass the listener here!
+                />
+              </div>
+            </div>
+
+            {/* Bottom Half: Detail Editor */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 20 }}>
+              <UseCaseDetailEditor data={selectedUseCaseId ? useCaseDetails[selectedUseCaseId] : null} onUpdate={handleDetailUpdate} />
             </div>
           </div>
         )}

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useRef } from 'react';
 import * as go from 'gojs';
 import { ReactDiagram } from 'gojs-react';
 import './DiagramWrapper.css';
@@ -11,6 +11,7 @@ interface DiagramProps {
   nodeDataArray: Array<NodeData>;
   linkDataArray: Array<LinkData>;
   onModelChange: (nodes: NodeData[], links: LinkData[]) => void;
+  onNodeSelect?: (key: number | null) => void;
 }
 
 const initDiagram = () => {
@@ -211,6 +212,43 @@ const initDiagram = () => {
 };
 
 export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref) => {
+  const diagramRef = useRef<go.Diagram | null>(null);
+
+  // [NEW] 1. Create a Ref to store the latest callback to avoid stale closures
+  const onNodeSelectRef = useRef(props.onNodeSelect);
+  useEffect(() => {
+    onNodeSelectRef.current = props.onNodeSelect;
+  }, [props.onNodeSelect]);
+
+  // [NEW] 2. Add the Event Listener
+  useEffect(() => {
+    if (ref && 'current' in ref && ref.current) {
+      const diagram = ref.current.getDiagram();
+
+      if (diagram && diagram !== diagramRef.current) {
+        diagramRef.current = diagram;
+
+        // Listen for Object Clicks
+        diagram.addDiagramListener('ObjectSingleClicked', (e) => {
+          const part = e.subject.part;
+          // Only trigger if it is a Usecase Node
+          if (part instanceof go.Node && part.data.category === 'Usecase') {
+            if (onNodeSelectRef.current) {
+              onNodeSelectRef.current(part.data.key);
+            }
+          } else {
+            // If clicking Link or Actor, deselect
+            if (onNodeSelectRef.current) onNodeSelectRef.current(null);
+          }
+        });
+
+        // Listen for Background Clicks (Deselect)
+        diagram.addDiagramListener('BackgroundSingleClicked', () => {
+          if (onNodeSelectRef.current) onNodeSelectRef.current(null);
+        });
+      }
+    }
+  });
   const handleModelChange = (changes: go.IncrementalData) => {
     console.log(changes);
     // 1. Check if we have the Diagram reference
