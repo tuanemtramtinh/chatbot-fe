@@ -83,6 +83,11 @@ export default function HomePage() {
             postconditions: 'Data is saved successfully.',
             mainFlow: '1. User selects action.\n2. System validates.\n3. System performs action.',
             alternativeFlow: '3a. If validation fails, show error.',
+            scores: {
+                      completeness: Math.floor(Math.random() * (100 - 70) + 70), // Random 70-100
+                      correctness: Math.floor(Math.random() * (100 - 80) + 80),  // Random 80-100
+                      relevance: Math.floor(Math.random() * (100 - 60) + 60),    // Random 60-100
+                  }
           };
         }
       });
@@ -134,6 +139,7 @@ export default function HomePage() {
   };
 
   const handleDiagramConfirm = (finalNodes: NodeData[], finalLinks: LinkData[]) => {
+    // Might haven't check for delete action on the diagram
     // 1. Create a copy of current details
     const finalDetails = { ...useCaseDetails };
 
@@ -150,6 +156,7 @@ export default function HomePage() {
           postconditions: '',
           mainFlow: '',
           alternativeFlow: '',
+          scores: { completeness: 0, correctness: 0, relevance: 0 }
         };
       }
     });
@@ -178,6 +185,7 @@ export default function HomePage() {
             postconditions: '',
             mainFlow: '',
             alternativeFlow: '',
+            scores: { completeness: 0, correctness: 0, relevance: 0 }
           },
         }));
       }
@@ -206,7 +214,7 @@ export default function HomePage() {
   };
 
   const steps = [
-    { title: 'Nhập yêu cầu', content: 'Nhập theo format' },
+    { title: 'Nhập yêu cầu', content: 'Nhập user stories' },
     { title: 'Actor Review', content: 'Xem và chỉnh sửa actors' },
     { title: 'Diagram & Scenario Review', content: 'Xem và chỉnh sửa diagram và scenario' },
     { title: 'Hoàn thành', content: 'Kết quả cuối cùng' },

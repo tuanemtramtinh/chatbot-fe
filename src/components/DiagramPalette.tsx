@@ -6,7 +6,7 @@ import './DiagramWrapper.css';
 // 1. Define the data outside initPalette
 const PALETTE_DATA = [
   { key: 'P-1', category: 'Actor', label: 'Actor' },
-  { key: 'P-2', category: 'Usecase', label: 'Use Case' },
+  { key: 'P-2', category: 'Usecase', label: 'Use Case', group: -99 },
 ];
 
 const initPalette = () => {

@@ -107,6 +107,14 @@ const initDiagram = () => {
     {
       layout: $(go.GridLayout, { wrappingColumn: 1, spacing: new go.Size(50, 50) }),
       padding: 10,
+      mouseDrop: (e: go.InputEvent, grp: go.GraphObject) => {
+        const group = grp as go.Group;
+        if (group.diagram) {
+            const ok = group.addMembers(group.diagram.selection, true);
+            // If the drop isn't allowed for some reason, cancel the tool
+            if (!ok) group.diagram.currentTool.doCancel();
+        }
+      },
     },
     // The "System Boundary" Rectangle
     $(go.Shape, 'Rectangle', {

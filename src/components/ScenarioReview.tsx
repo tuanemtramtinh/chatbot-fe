@@ -1,8 +1,8 @@
 // src/components/UseCaseDetailEditor.tsx
-import { Table, Input, Card, Typography, Empty } from 'antd';
+import { Table, Input, Card, Typography, Empty, Flex, Tooltip, Progress } from 'antd';
 import { useEffect, useState } from 'react';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 // 1. Define the Data Structure
@@ -15,6 +15,11 @@ export interface UseCaseDetail {
   postconditions: string;
   mainFlow: string;
   alternativeFlow: string;
+  scores: {
+    completeness: number; // 0-100
+    correctness: number;  // 0-100
+    relevance: number;    // 0-100
+  };
 }
 
 interface UseCaseDetailEditorProps {
@@ -112,14 +117,54 @@ export const UseCaseDetailEditor = ({ data, onUpdate }: UseCaseDetailEditorProps
     },
   ];
 
+  // Helper to get color based on score
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return '#52c41a'; // Green
+    if (score >= 60) return '#faad14'; // Yellow
+    return '#ff4d4f'; // Red
+  };
+
+  // Calculate Average
+  const averageScore = Math.round(
+    (editingData.scores.completeness + editingData.scores.correctness + editingData.scores.relevance) / 3
+  );
+
   return (
     <Card
       style={{ marginTop: '16px', borderTop: '3px solid #1890ff' }}
       styles={{ body: { padding: 0 } }}
       title={
-        <Title level={5} style={{ margin: 0 }}>
-          Specification: {editingData.name}
-        </Title>
+        <Flex justify="space-between" align="center">
+            <Title level={5} style={{ margin: 0 }}>Specification: {editingData.name}</Title>
+            
+            {/* --- NEW: SCOREBOARD SECTION --- */}
+            <Flex gap="large" align="center" style={{ fontSize: '12px' }}>
+                <Tooltip title="Does the scenario cover all necessary steps?">
+                    <Flex gap="small" align="center">
+                        <Text type="secondary">Completeness</Text>
+                        <Progress type="circle" percent={editingData.scores.completeness} width={30} strokeColor={getScoreColor(editingData.scores.completeness)} />
+                    </Flex>
+                </Tooltip>
+                
+                <Tooltip title="Is the logic sound and free of contradictions?">
+                    <Flex gap="small" align="center">
+                        <Text type="secondary">Correctness</Text>
+                        <Progress type="circle" percent={editingData.scores.correctness} width={30} strokeColor={getScoreColor(editingData.scores.correctness)} />
+                    </Flex>
+                </Tooltip>
+
+                <Tooltip title="Does this align with the original requirement?">
+                    <Flex gap="small" align="center">
+                        <Text type="secondary">Relevance</Text>
+                        <Progress type="circle" percent={editingData.scores.relevance} width={30} strokeColor={getScoreColor(editingData.scores.relevance)} />
+                    </Flex>
+                </Tooltip>
+
+                <div style={{ borderLeft: '1px solid #f0f0f0', paddingLeft: '16px', marginLeft: '8px' }}>
+                    <Text strong style={{ color: getScoreColor(averageScore) }}>Avg: {averageScore}%</Text>
+                </div>
+            </Flex>
+        </Flex>
       }
     >
       <Table
