@@ -39,15 +39,15 @@ export const validateNonActor = (input: string): ValidationResult => {
     };
   }
 
-  const matches = input.match(FORBIDDEN_PATTERN);
-  if (matches) {
-    const forbiddenWords = matches.map((m) => m.toLowerCase());
-    return {
-      isValid: false,
-      error: `Actor không được chứa từ cấm: ${forbiddenWords.join(', ')}. Actor phải là người dùng hoặc vai trò, không phải hệ thống hoặc công nghệ.`,
-      forbiddenWords,
-    };
-  }
+  // const matches = input.match(FORBIDDEN_PATTERN);
+  // if (matches) {
+  //   const forbiddenWords = matches.map((m) => m.toLowerCase());
+  //   return {
+  //     isValid: false,
+  //     error: `Actor không được chứa từ cấm: ${forbiddenWords.join(', ')}. Actor phải là người dùng hoặc vai trò, không phải hệ thống hoặc công nghệ.`,
+  //     forbiddenWords,
+  //   };
+  // }
 
   return {
     isValid: true,
