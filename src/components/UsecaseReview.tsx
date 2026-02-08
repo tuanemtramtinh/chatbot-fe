@@ -1,266 +1,167 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/components/UsecaseReview.tsx
-import { Table, Button, Space, Typography, message as antdMessage, Popconfirm, Input, Card, Badge, Tooltip } from 'antd';
-import { DeleteOutlined, MergeCellsOutlined, PlusOutlined, CheckOutlined, UndoOutlined, ArrowDownOutlined } from '@ant-design/icons';
-import { useEffect, useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Table, Card, Button, Input, Typography, Badge, Tag, List } from 'antd';
+import type { BackendUseCase } from './api';
 
 const { Title, Text } = Typography;
 
-export interface Usecase {
-  id: string;
-  name: string;
-  alias: string[];
-  sentences_idx: number[];
-  status?: 'candidate' | 'approved';
-}
-
 interface UsecaseReviewProps {
-  usecases: Usecase[];
-  onConfirm: (candidates: Usecase[], approved: Usecase[]) => void;
+  usecases: BackendUseCase[];
+  // Updated: Returns just the final list of use cases
+  onConfirm: (finalList: BackendUseCase[]) => void;
 }
 
 export const UsecaseReview = ({ usecases: initialUsecases, onConfirm }: UsecaseReviewProps) => {
   // --- STATE ---
-  const [candidates, setCandidates] = useState<Usecase[]>([]);
-  const [approved, setApproved] = useState<Usecase[]>([]);
-  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<React.Key[]>([]);
-  // Use Ref to prevent cascading renders (only load initial data once)
-  const hasInitialized = useRef(false);
+  const [list, setList] = useState<BackendUseCase[]>([]);
+  const initialized = useRef(false);
+
   useEffect(() => {
-    // Only load if we have data and haven't initialized yet
-    if (initialUsecases.length > 0 && !hasInitialized.current) {
-      const incomingCandidates = initialUsecases.filter((a) => a.status !== 'approved');
-      const incomingApproved = initialUsecases.filter((a) => a.status === 'approved');
+    if (initialUsecases.length > 0 && !initialized.current) {
+      // Map Backend Data -> UI Data
+      const mapped = initialUsecases.map((uc, idx) => ({
+        ...uc,
+        uiId: `uc-${uc.id || idx}-${Date.now()}`,
+      }));
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCandidates(incomingCandidates);
-      setApproved(incomingApproved);
-      hasInitialized.current = true;
+      setList(mapped);
+      initialized.current = true;
     }
   }, [initialUsecases]);
 
-  const updateLists = (newCandidates: Usecase[], newApproved: Usecase[]) => {
-    setCandidates(newCandidates);
-    setApproved(newApproved);
-  };
-
   // --- ACTIONS ---
-  const handleApprove = (id: string) => {
-    const actorToMove = candidates.find((a) => a.id === id);
-    if (actorToMove) {
-      const newCandidates = candidates.filter((a) => a.id !== id);
-      const newApproved = [...approved, actorToMove];
-
-      setSelectedCandidateKeys((prev) => prev.filter((k) => k !== id));
-      updateLists(newCandidates, newApproved);
-      antdMessage.success('Đã duyệt Usecase');
-    }
+  const handleFieldChange = (id: number, field: keyof BackendUseCase, value: any) => {
+    setList((prev) => prev.map((uc) => (uc.id === id ? { ...uc, [field]: value } : uc)));
   };
 
-  const handleRevert = (id: string) => {
-    const actorToMove = approved.find((a) => a.id === id);
-    if (actorToMove) {
-      const newApproved = approved.filter((a) => a.id !== id);
-      const newCandidates = [...candidates, actorToMove];
-
-      updateLists(newCandidates, newApproved);
-    }
+  const handleConfirm = () => {
+    onConfirm(list);
   };
 
-  const handleApproveAll = () => {
-    const newApproved = [...approved, ...candidates];
-    setSelectedCandidateKeys([]);
-    updateLists([], newApproved);
-    antdMessage.success('Đã duyệt tất cả');
+  // --- RENDER HELPERS ---
+
+  // 1. Expanded Row: User Stories
+  const renderExpandedRow = (record: BackendUseCase) => {
+    return (
+      <div style={{ padding: '8px 16px', background: '#f9f9f9', borderRadius: 4 }}>
+        <Text strong style={{ fontSize: 12, color: '#666' }}>
+          User Stories & Evidence:
+        </Text>
+        <List
+          size="small"
+          dataSource={record.user_stories}
+          renderItem={(story) => (
+            <List.Item style={{ padding: '4px 0', border: 'none' }}>
+              <Text style={{ fontSize: 13 }}>
+                <Badge status="default" />
+                <Text strong>{story.actor}</Text> wants to <Text strong>{story.action}</Text>
+                <span style={{ color: '#999', marginLeft: 8 }}>(Sentence #{story.sentence_idx})</span>
+              </Text>
+              <div style={{ paddingLeft: 20, fontSize: 12, color: '#888', fontStyle: 'italic' }}>"{story.original_sentence}"</div>
+            </List.Item>
+          )}
+          locale={{ emptyText: <Text type="secondary">No user stories linked.</Text> }}
+        />
+      </div>
+    );
   };
 
-  const handleDelete = (id: string, listType: 'candidate' | 'approved') => {
-    if (listType === 'candidate') {
-      const newCandidates = candidates.filter((a) => a.id !== id);
-      setSelectedCandidateKeys((prev) => prev.filter((k) => k !== id));
-      updateLists(newCandidates, approved);
-    } else {
-      const newApproved = approved.filter((a) => a.id !== id);
-      updateLists(candidates, newApproved);
-    }
-    antdMessage.success('Đã xóa Usecase');
+  // 2. Relationship Renderer
+  const renderRelationships = (rels: { type: string; target_use_case: string }[] | undefined) => {
+    if (!rels || rels.length === 0) return <Text type="secondary">-</Text>;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {rels.map((rel, idx) => (
+          <Tag key={idx} color={rel.type === 'include' ? 'blue' : 'orange'}>
+            &lt;&lt;{rel.type}&gt;&gt; {rel.target_use_case}
+          </Tag>
+        ))}
+      </div>
+    );
   };
 
-  const handleAddCandidate = () => {
-    const newUsecase: Usecase = {
-      id: Date.now().toString(),
-      name: `New Usecase`,
-      alias: [],
-      sentences_idx: [],
-    };
-    const newCandidates = [...candidates, newUsecase];
-    updateLists(newCandidates, approved);
-  };
-
-  const handleFieldChange = (id: string, field: keyof Usecase, value: any, listType: 'candidate' | 'approved') => {
-    if (listType === 'candidate') {
-      const newCandidates = candidates.map((a) => (a.id === id ? { ...a, [field]: value } : a));
-      updateLists(newCandidates, approved);
-    } else {
-      const newApproved = approved.map((a) => (a.id === id ? { ...a, [field]: value } : a));
-      updateLists(candidates, newApproved);
-    }
-  };
-
-  const handleMergeCandidates = () => {
-    if (selectedCandidateKeys.length < 2) {
-      antdMessage.warning('Chọn ít nhất 2 Usecase để gộp');
-      return;
-    }
-
-    const selectedUsecases = candidates.filter((actor) => selectedCandidateKeys.includes(actor.id));
-    const firstUsecase = selectedUsecases[0];
-    const mergedNames = selectedUsecases.map((a) => a.name).join(' / ');
-
-    const mergedUsecase: Usecase = {
-      id: firstUsecase.id,
-      name: mergedNames,
-      alias: [],
-      sentences_idx: [],
-    };
-
-    const newCandidates = [...candidates.filter((actor) => !selectedCandidateKeys.includes(actor.id)), mergedUsecase];
-
-    setSelectedCandidateKeys([]);
-    updateLists(newCandidates, approved);
-    antdMessage.success('Đã gộp thành công');
-  };
-
-  // --- COLUMNS ---
-  const renderInput = (text: string, record: Usecase, field: keyof Usecase, listType: 'candidate' | 'approved') => (
-    <Input
-      value={text}
-      onChange={(e) => handleFieldChange(record.id, field, e.target.value, listType)}
-      variant="borderless"
-      placeholder="Usecase Name"
-      style={{ padding: 0, fontWeight: 500 }}
-    />
-  );
-
-  const candidateColumns = [
+  // 3. Columns Definition
+  const columns = [
     {
-      title: 'Tên Usecase (Candidates)',
+      title: 'Use Case Name',
       dataIndex: 'name',
-      key: 'name',
-      width: '30%',
-      render: (text: string, record: Usecase) => renderInput(text, record, 'name', 'candidate'),
-    },
-    {
-      title: 'Hành động',
-      key: 'action',
-      width: '10%',
-      render: (_: any, record: Usecase) => (
-        <Space>
-          <Tooltip title="Approve">
-            <Button type="link" size="small" shape="circle" icon={<CheckOutlined />} onClick={() => handleApprove(record.id)} />
-          </Tooltip>
-          <Popconfirm title="Delete?" onConfirm={() => handleDelete(record.id, 'candidate')}>
-            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
+      width: '25%',
+      render: (text: string, record: BackendUseCase) => (
+        <Input
+          value={text}
+          onChange={(e) => handleFieldChange(record.id, 'name', e.target.value)}
+          variant="borderless"
+          style={{ fontWeight: 600 }}
+          placeholder="Use Case Name"
+        />
       ),
     },
-  ];
-
-  const approvedColumns = [
     {
-      title: 'Tên Usecase (Approved)',
-      dataIndex: 'name',
-      key: 'name',
-      width: '30%',
-      render: (text: string, record: Usecase) => renderInput(text, record, 'name', 'approved'),
+      title: 'Description',
+      dataIndex: 'description',
+      width: '35%',
+      render: (text: string, record: BackendUseCase) => (
+        <Input.TextArea
+          value={text}
+          onChange={(e) => handleFieldChange(record.id, 'description', e.target.value)}
+          variant="borderless"
+          autoSize={{ minRows: 1, maxRows: 3 }}
+          style={{ fontSize: 13, color: '#555' }}
+          placeholder="Description"
+        />
+      ),
     },
     {
-      title: 'Action',
-      key: 'action',
-      width: '10%',
-      render: (_: any, record: Usecase) => (
-        <Space>
-          <Tooltip title="Revert">
-            <Button size="small" type="link" icon={<UndoOutlined />} onClick={() => handleRevert(record.id)} />
-          </Tooltip>
-          <Popconfirm title="Delete?" onConfirm={() => handleDelete(record.id, 'approved')}>
-            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
+      title: 'Relationships',
+      dataIndex: 'relationships',
+      width: '15%',
+      render: (rels: any) => renderRelationships(rels),
+    },
+    {
+      title: 'Actors',
+      dataIndex: 'participating_actors',
+      width: '15%',
+      render: (actors: string[]) => (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {actors.map((a) => (
+            <Tag key={a}>{a}</Tag>
+          ))}
+        </div>
       ),
     },
   ];
 
   return (
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
+      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level={4} style={{ margin: 0 }}>
-          Review & Approve Usecases
+          Review Use Cases
         </Title>
-        <Button type="primary" size="middle" onClick={() => onConfirm(candidates, approved)} disabled={approved.length === 0}>
-          Confirm Approved ({approved.length}) & Continue
+        <Button type="primary" size="large" onClick={handleConfirm} disabled={list.length === 0}>
+          Confirm & Generate Diagram
         </Button>
       </div>
 
-      {/* --- TABLE 1: CANDIDATES --- */}
+      {/* MAIN TABLE */}
       <Card
         size="small"
-        title={
-          <Space>
-            <Badge status="warning" />
-            <Text strong>Candidates</Text>
-            <Badge count={candidates.length} style={{ backgroundColor: '#faad14' }} />
-          </Space>
-        }
-        extra={
-          <Space style={{ padding: 10 }}>
-            <Button type="text" icon={<MergeCellsOutlined />} onClick={handleMergeCandidates} disabled={selectedCandidateKeys.length < 2}>
-              Merge
-            </Button>
-            <Button type="text" icon={<ArrowDownOutlined />} onClick={handleApproveAll} disabled={candidates.length === 0}>
-              Approve All
-            </Button>
-            <Button type="dashed" size="middle" icon={<PlusOutlined />} onClick={handleAddCandidate}>
-              Add
-            </Button>
-          </Space>
-        }
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px' }}
+        style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
         styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
       >
         <Table
-          rowSelection={{
-            selectedRowKeys: selectedCandidateKeys,
-            onChange: setSelectedCandidateKeys,
-          }}
-          columns={candidateColumns}
-          dataSource={candidates}
-          rowKey="id"
+          columns={columns}
+          dataSource={list}
+          rowKey="uiId"
           pagination={false}
+          expandable={{
+            expandedRowRender: renderExpandedRow,
+            rowExpandable: (record) => record.user_stories.length > 0,
+          }}
+          locale={{ emptyText: 'No use cases generated.' }}
         />
-      </Card>
-
-      <div style={{ textAlign: 'center', color: '#1890ff' }}>
-        <ArrowDownOutlined style={{ fontSize: '24px' }} />
-      </div>
-
-      {/* --- TABLE 2: APPROVED --- */}
-      <Card
-        size="small"
-        title={
-          <Space>
-            <Badge status="success" />
-            <Text strong>Approved</Text>
-            <Badge count={approved.length} style={{ backgroundColor: '#52c41a' }} />
-          </Space>
-        }
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '200px', border: '1px solid #b7eb8f' }}
-        styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
-      >
-        <Table columns={approvedColumns} dataSource={approved} rowKey="id" pagination={false} locale={{ emptyText: 'No usecases approved yet.' }} />
       </Card>
     </div>
   );
 };
-
-export default UsecaseReview;

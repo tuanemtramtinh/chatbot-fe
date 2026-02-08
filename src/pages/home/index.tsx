@@ -1,17 +1,28 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Flex, Layout, Menu, Steps, Typography, message as antdMessage } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 
 // Components
 import StructuredInput from '../../components/StructuredInput';
-import ActorReview, { type UIActor } from '../../components/ActorReview'; // Import UIActor
+import ActorReview, { type UIActor } from '../../components/ActorReview';
 import { UsecaseReview } from '../../components/UsecaseReview';
 
 // Services & Types
-import { apiService, type BackendUseCase, type Step2Request, type ActorEntity } from '../../components/api';
+import {
+  apiService,
+  type BackendUseCase,
+  type Step2Request,
+  type ActorEntity,
+  type Step3Request,
+  type DiagramNode,
+  type DiagramLink,
+} from '../../components/api';
 import { storageService, type ProjectSession } from '../../utils/storage';
+import { DiagramWrapper } from '../../components/DiagramWrapper';
+import { DiagramPalette } from '../../components/DiagramPalette';
+import type { ReactDiagram } from 'gojs-react';
+import { UseCaseDetailEditor, type UseCaseDetail } from '../../components/ScenarioReview';
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -28,6 +39,13 @@ export default function HomePage() {
   const [inputStoryText, setInputStoryText] = useState('');
   const [actors, setActors] = useState<UIActor[]>([]); // Uses UI Actor type
   const [usecases, setUsecases] = useState<BackendUseCase[]>([]);
+  const [diagramNodes, setDiagramNodes] = useState<DiagramNode[]>([]);
+  const [diagramLinks, setDiagramLinks] = useState<DiagramLink[]>([]);
+  const diagramRef = useRef<ReactDiagram>(null);
+  const [useCaseDetails, setUseCaseDetails] = useState<Record<number, UseCaseDetail>>({});
+  const [selectedUseCaseId, setSelectedUseCaseId] = useState<number | null>(null);
+
+  const initialDetails: Record<number, UseCaseDetail> = {};
 
   const [isTyping, setIsTyping] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -69,6 +87,10 @@ export default function HomePage() {
       const ucToLoad = session.step2.final ? session.step2.final.approvedUseCases : session.step2.initial.extractedUseCases;
       setUsecases(ucToLoad);
     }
+    if (session.step3) {
+      setDiagramNodes(session.step3.initial.nodes);
+      setDiagramLinks(session.step3.initial.links);
+    }
   };
 
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
@@ -94,7 +116,7 @@ export default function HomePage() {
       .filter((s) => s.length > 0);
 
     setIsTyping(true);
-    antdMessage.loading({ content: 'Analyzing user stories...', key: 'analyzing' });
+    const stopLoading = antdMessage.loading({ content: 'Analyzing user stories...', key: 'analyzing', duration: 0 });
 
     try {
       const data = await apiService.extractActors(storiesList);
@@ -125,6 +147,7 @@ export default function HomePage() {
             final: undefined,
           },
           step2: null,
+          step3: null,
         };
 
         storageService.saveSession(newSession);
@@ -138,6 +161,7 @@ export default function HomePage() {
       antdMessage.error({ content: 'Failed to analyze stories', key: 'analyzing' });
     } finally {
       setIsTyping(false);
+      stopLoading();
     }
   };
 
@@ -157,56 +181,107 @@ export default function HomePage() {
         },
       },
     };
-    console.log(step1FinalSession);
-    // storageService.saveSession(step1FinalSession);
-    // setCurrentSession(step1FinalSession);
+    storageService.saveSession(step1FinalSession);
+    setCurrentSession(step1FinalSession);
 
-    // // 2. Call API (No complex mapping needed anymore!)
-    // const requestPayload: Step2Request = {
-    //   thread_id: currentSession.id,
-    //   actors: approved,
-    // };
-    // antdMessage.loading({ content: 'Generating Use Cases...', key: 'generating' });
-    // try {
-    //   const data = await apiService.extractUseCases(requestPayload);
+    // 2. Call API (No complex mapping needed anymore!)
+    const requestPayload: Step2Request = {
+      thread_id: currentSession.id,
+      actors: approved,
+    };
+    const stopLoading = antdMessage.loading({ content: 'Generating Use Cases...', key: 'generating', duration: 0 });
+    try {
+      const data = await apiService.extractUseCases(requestPayload);
 
-    //   if (data.interrupt?.type === 'review_usecases') {
-    //     const extractedUC = data.interrupt.usecases;
+      if (data.interrupt?.type === 'review_usecases') {
+        const extractedUC = data.interrupt.usecases;
 
-    //     // 4. Save Step 2 Initial State
-    //     const step2Session: ProjectSession = {
-    //       ...step1FinalSession,
-    //       currentPhase: 'usecase-review',
-    //       step2: {
-    //         initial: {
-    //           extractedUseCases: extractedUC,
-    //         },
-    //         final: undefined,
-    //       },
-    //     };
+        // 4. Save Step 2 Initial State
+        const step2Session: ProjectSession = {
+          ...step1FinalSession,
+          currentPhase: 'usecase-review',
+          step2: {
+            initial: {
+              extractedUseCases: extractedUC,
+            },
+            final: undefined,
+          },
+        };
 
-    //     storageService.saveSession(step2Session);
-    //     setCurrentSession(step2Session);
+        storageService.saveSession(step2Session);
+        setCurrentSession(step2Session);
 
-    //     // 5. Update UI
-    //     setUsecases(extractedUC);
-    //     setPhase('usecase-review');
-    //     antdMessage.success({ content: 'Use cases generated!', key: 'generating' });
-    //   }
-    // } catch {
-    //   antdMessage.error({ content: 'Failed to generate use cases', key: 'generating' });
-    // }
+        // 5. Update UI
+        setUsecases(extractedUC);
+        setPhase('usecase-review');
+        antdMessage.success({ content: 'Use cases generated!', key: 'generating' });
+      }
+    } catch {
+      antdMessage.error({ content: 'Failed to generate use cases', key: 'generating' });
+    } finally {
+      stopLoading();
+    }
   };
+
+  const handleUseCaseConfirm = async (finalUseCases: BackendUseCase[]) => {
+    if (!currentSession) return;
+
+    // 1. Save Step 2 Final
+    const step2FinalSession: ProjectSession = {
+      ...currentSession,
+      lastModified: Date.now(),
+      step2: { ...currentSession.step2!, final: { approvedUseCases: finalUseCases } },
+    };
+    storageService.saveSession(step2FinalSession);
+    setCurrentSession(step2FinalSession);
+
+    // 2. Call API
+    const requestPayload: Step3Request = { thread_id: currentSession.id, usecases: finalUseCases };
+    const stopLoading = antdMessage.loading({ content: 'Generating Diagram...', key: 'gen_diagram', duration: 0 });
+
+    try {
+      const data = await apiService.generateDiagram(requestPayload);
+
+      // 3. Save Step 3 Initial
+      const step3Session: ProjectSession = {
+        ...step2FinalSession,
+        currentPhase: 'diagram-scenario-review',
+        step3: {
+          initial: { nodes: data.nodes, links: data.links },
+          final: undefined,
+        },
+      };
+      storageService.saveSession(step3Session);
+      setCurrentSession(step3Session);
+
+      // 4. Update UI
+      setDiagramNodes(data.nodes);
+      setDiagramLinks(data.links);
+      setPhase('diagram-scenario-review');
+      antdMessage.success({ content: 'Diagram Generated!', key: 'gen_diagram' });
+    } catch (e) {
+      console.error(e);
+      antdMessage.error({ content: 'Failed to generate diagram', key: 'gen_diagram' });
+    } finally {
+      stopLoading();
+    }
+  };
+
+  const handleDiagramConfirm = async (userDiagramNodes: DiagramNode[], userDiagramLinks: DiagramLink[]) => {
+    console.log(userDiagramNodes, userDiagramLinks);
+  };
+  const handleNodeSelect = () => {};
+  const handleDetailUpdate = () => {};
 
   // --- RENDER HELPERS ---
   const steps = [
     { title: 'Input', content: 'Enter user stories' },
-    { title: 'Actor', content: 'Review actors' },
-    { title: 'Usecase Review' },
-    { title: 'Diagram' },
+    { title: 'Actors', content: 'Review actors' },
+    { title: 'Usecases', content: 'Review usecases' },
+    { title: 'Diagram & Detail', content: 'Diagram & Scenario Review' },
   ];
 
-  const currentStep = phase === 'input' ? 0 : phase === 'actor-review' ? 1 : phase === 'usecase-review' ? 2 : 3;
+  const currentStep = phase === 'input' ? 0 : phase === 'actor-review' ? 1 : phase === 'usecase-review' ? 2 : phase === 'diagram-scenario-review' ? 3 : 4;
 
   return (
     <Flex>
@@ -249,22 +324,46 @@ export default function HomePage() {
             {phase === 'actor-review' && <ActorReview actors={actors} rawStoryText={inputStoryText} onConfirm={handleActorConfirm} />}
 
             {/* PHASE 3: USECASE REVIEW */}
-            {/* {phase === 'usecase-review' && (
-              <UsecaseReview
-                usecases={usecases}
-                onConfirm={() => {
-                  console.log('Next step: Diagram');
-                  setPhase('diagram-scenario-review');
-                }}
-              />
-            )} */}
+            {phase === 'usecase-review' && <UsecaseReview usecases={usecases} onConfirm={handleUseCaseConfirm} />}
 
-            {/* PHASE 4: DIAGRAM (Placeholder) */}
+            {/* PHASE 4: DIAGRAM */}
             {phase === 'diagram-scenario-review' && (
-              <div style={{ textAlign: 'center', marginTop: 50 }}>
-                <h3>Diagram Generation Phase</h3>
-                <p>Session ID: {currentSession?.id}</p>
-                <Button onClick={() => setPhase('usecase-review')}>Back to Usecases</Button>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                {/* Top Half: Diagram */}
+                <div style={{ display: 'flex', height: '500px', position: 'relative' }}>
+                  <DiagramPalette />
+                  <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
+                    <button
+                      onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
+                      style={{
+                        position: 'absolute',
+                        zIndex: 10,
+                        top: 10,
+                        right: 10,
+                        backgroundColor: '#52c41a',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Confirm Diagram
+                    </button>
+                    <DiagramWrapper
+                      ref={diagramRef}
+                      nodeDataArray={diagramNodes}
+                      linkDataArray={diagramLinks}
+                      onModelChange={() => {}}
+                      onNodeSelect={handleNodeSelect} // <--- Pass the listener here!
+                    />
+                  </div>
+                </div>
+
+                {/* Bottom Half: Detail Editor */}
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 20 }}>
+                  <UseCaseDetailEditor data={selectedUseCaseId ? useCaseDetails[selectedUseCaseId] : null} onUpdate={handleDetailUpdate} />
+                </div>
               </div>
             )}
           </div>

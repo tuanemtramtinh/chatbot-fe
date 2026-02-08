@@ -3,14 +3,12 @@ import { forwardRef, useEffect, useRef } from 'react';
 import * as go from 'gojs';
 import { ReactDiagram } from 'gojs-react';
 import './DiagramWrapper.css';
-
-export type NodeData = { key: number; category?: string; label: string; isGroup?: boolean; group?: number; loc?: string };
-export type LinkData = { key: number; from: number; to: number; text?: string };
+import type { DiagramLink, DiagramNode } from './api';
 
 interface DiagramProps {
-  nodeDataArray: Array<NodeData>;
-  linkDataArray: Array<LinkData>;
-  onModelChange: (nodes: NodeData[], links: LinkData[]) => void;
+  nodeDataArray: Array<DiagramNode>;
+  linkDataArray: Array<DiagramLink>;
+  onModelChange: (nodes: DiagramNode[], links: DiagramLink[]) => void;
   onNodeSelect?: (key: number | null) => void;
 }
 
@@ -24,6 +22,8 @@ const initDiagram = () => {
     'toolManager.mouseWheelBehavior': go.ToolManager.WheelZoom,
     // Force layout to push node apart
     layout: $(go.ForceDirectedLayout, {
+      isInitial: true,
+      isOngoing: false,
       defaultSpringLength: 50,
       defaultElectricalCharge: 10,
       // isOngoing: false,
@@ -107,12 +107,12 @@ const initDiagram = () => {
     {
       layout: $(go.GridLayout, { wrappingColumn: 1, spacing: new go.Size(50, 50) }),
       padding: 10,
-      mouseDrop: (e: go.InputEvent, grp: go.GraphObject) => {
+      mouseDrop: (_e: go.InputEvent, grp: go.GraphObject) => {
         const group = grp as go.Group;
         if (group.diagram) {
-            const ok = group.addMembers(group.diagram.selection, true);
-            // If the drop isn't allowed for some reason, cancel the tool
-            if (!ok) group.diagram.currentTool.doCancel();
+          const ok = group.addMembers(group.diagram.selection, true);
+          // If the drop isn't allowed for some reason, cancel the tool
+          if (!ok) group.diagram.currentTool.doCancel();
         }
       },
     },
@@ -270,7 +270,7 @@ export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref
         const allLinks = (diagram.model as go.GraphLinksModel).linkDataArray.slice();
 
         // 3. Send the full arrays back to parent
-        props.onModelChange(allNodes as NodeData[], allLinks as LinkData[]);
+        props.onModelChange(allNodes as DiagramNode[], allLinks as DiagramLink[]);
       }
     }
   };
