@@ -1,11 +1,9 @@
 // Guide:
 // Format_def for sentence type format
 // All field are required
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/StructuredInput.tsx
 import { Input, Form, Button, Flex, Typography, Select, Card, Divider, Tooltip, message } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeywordSuggester } from './KeywordSuggester';
 import { DeleteOutlined, PlusOutlined, SendOutlined, InfoCircleOutlined, SwapOutlined } from '@ant-design/icons';
 import Paragraph from 'antd/es/typography/Paragraph';
@@ -77,8 +75,9 @@ interface Block {
 }
 
 interface StructuredInputProps {
-  onSubmit: (fullText: string, blocks: any[]) => void;
+  onSubmit: (fullText: string) => void;
   isSubmitting?: boolean;
+  initialValue?: string;
 }
 
 // --- PARSER HELPER ---
@@ -117,7 +116,7 @@ const parseParagraphToBlocks = (text: string): Block[] => {
       // Fallback: Dump text into actor field and flag error
       // Note: We use 'user_story' as the base format for errors
       extractedValues['article'] = 'a';
-      extractedValues['actor'] = trimmed;
+      extractedValues['actor'] = '';
       extractedValues['action'] = '';
       extractedValues['benefit'] = '';
       errors['actor'] = 'Invalid format. Could not parse.';
@@ -132,7 +131,7 @@ const parseParagraphToBlocks = (text: string): Block[] => {
   });
 };
 
-export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps) => {
+export const StructuredInput = ({ onSubmit, isSubmitting, initialValue }: StructuredInputProps) => {
   // Initialize with one default User Story block
   const [blocks, setBlocks] = useState<Block[]>(() => [
     {
@@ -144,6 +143,14 @@ export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps
   ]);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  useEffect(() => {
+    if (initialValue && initialValue.trim().length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBulkText(initialValue);
+      const parsed = parseParagraphToBlocks(initialValue);
+      setBlocks(parsed);
+    }
+  }, [initialValue]);
 
   // --- ACTIONS ---
   const handleToggleMode = () => {
@@ -278,16 +285,8 @@ export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps
     }
 
     // Generate Full Paragraph
-    const fullParagraph = validatedBlocks.map((b) => FORMAT_DEFS[b.format].template(b.values)).join(' ');
-
-    // Flatten data for the parent (optional: clean up structure)
-    const payload = validatedBlocks.map((b) => ({
-      id: b.id,
-      format: b.format,
-      ...b.values,
-    }));
-
-    onSubmit(fullParagraph, payload);
+    const fullParagraph = validatedBlocks.map((b) => FORMAT_DEFS[b.format].template(b.values)).join('\n');
+    onSubmit(fullParagraph);
   };
 
   const isFormValid = blocks.every((b) => Object.keys(b.errors).length === 0 && Object.values(b.values).every((v) => v.trim()));
@@ -379,7 +378,7 @@ export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps
       <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
         {isBulkMode ? (
           // BULK PASTE MODE
-          <Card size="small" title="Bulk Entry Mode" style={{ height: '100%', display: 'flex', flexDirection: 'column' }} bodyStyle={{ flex: 1 }}>
+          <Card size="small" title="Bulk Entry Mode" style={{ height: '100%', display: 'flex', flexDirection: 'column' }} styles={{ body: { flex: 1 } }}>
             <Input.TextArea
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}

@@ -9,7 +9,8 @@ const { Title, Text } = Typography;
 export interface Actor {
   id: string;
   name: string;
-  description?: string;
+  alias: string[];
+  sentences_idx: number[];
   status?: 'candidate' | 'approved';
 }
 
@@ -88,7 +89,8 @@ export const ActorReview = ({ actors: initialActors, onConfirm }: ActorReviewPro
     const newActor: Actor = {
       id: Date.now().toString(),
       name: `New Actor`,
-      description: '',
+      alias: [],
+      sentences_idx: [],
     };
     const newCandidates = [...candidates, newActor];
     updateLists(newCandidates, approved);
@@ -117,10 +119,8 @@ export const ActorReview = ({ actors: initialActors, onConfirm }: ActorReviewPro
     const mergedActor: Actor = {
       id: firstActor.id,
       name: mergedNames,
-      description: selectedActors
-        .map((a) => a.description)
-        .filter(Boolean)
-        .join('; '),
+      alias: [],
+      sentences_idx: [],
     };
 
     const newCandidates = [...candidates.filter((actor) => !selectedCandidateKeys.includes(actor.id)), mergedActor];
@@ -131,25 +131,15 @@ export const ActorReview = ({ actors: initialActors, onConfirm }: ActorReviewPro
   };
 
   // --- COLUMNS ---
-  const renderInput = (text: string, record: Actor, field: keyof Actor, listType: 'candidate' | 'approved') =>
-    field === 'description' ? (
-      <Input.TextArea
-        value={text}
-        onChange={(e) => handleFieldChange(record.id, field, e.target.value, listType)}
-        variant="borderless"
-        autoSize={{ minRows: 1, maxRows: 3 }}
-        style={{ padding: 0, resize: 'none', fontSize: '13px', color: '#666' }}
-        placeholder="Add description..."
-      />
-    ) : (
-      <Input
-        value={text}
-        onChange={(e) => handleFieldChange(record.id, field, e.target.value, listType)}
-        variant="borderless"
-        placeholder="Actor Name"
-        style={{ padding: 0, fontWeight: 500 }}
-      />
-    );
+  const renderInput = (text: string, record: Actor, field: keyof Actor, listType: 'candidate' | 'approved') => (
+    <Input
+      value={text}
+      onChange={(e) => handleFieldChange(record.id, field, e.target.value, listType)}
+      variant="borderless"
+      placeholder="Actor Name"
+      style={{ padding: 0, fontWeight: 500 }}
+    />
+  );
 
   const candidateColumns = [
     {
@@ -158,12 +148,6 @@ export const ActorReview = ({ actors: initialActors, onConfirm }: ActorReviewPro
       key: 'name',
       width: '30%',
       render: (text: string, record: Actor) => renderInput(text, record, 'name', 'candidate'),
-    },
-    {
-      title: 'Mô tả',
-      dataIndex: 'description',
-      key: 'description',
-      render: (text: string, record: Actor) => renderInput(text, record, 'description', 'candidate'),
     },
     {
       title: 'Hành động',
@@ -189,12 +173,6 @@ export const ActorReview = ({ actors: initialActors, onConfirm }: ActorReviewPro
       key: 'name',
       width: '30%',
       render: (text: string, record: Actor) => renderInput(text, record, 'name', 'approved'),
-    },
-    {
-      title: 'Mô tả',
-      dataIndex: 'description',
-      key: 'description',
-      render: (text: string, record: Actor) => renderInput(text, record, 'description', 'approved'),
     },
     {
       title: 'Action',
