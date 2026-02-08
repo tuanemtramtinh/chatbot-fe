@@ -1,15 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// src/pages/home/index.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Flex, Layout, Menu, Steps, Typography, message as antdMessage } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+
+// Components
 import StructuredInput from '../../components/StructuredInput';
-import ActorReview, { type Actor } from '../../components/ActorReview';
-import { DiagramWrapper, type NodeData, type LinkData } from '../../components/DiagramWrapper';
-import type { ReactDiagram } from 'gojs-react';
-import { DiagramPalette } from '../../components/DiagramPalette';
-import { UseCaseDetailEditor, type UseCaseDetail } from '../../components/ScenarioReview';
-import { apiService, type BackendActor } from '../../components/api';
+import ActorReview, { type UIActor } from '../../components/ActorReview'; // Import UIActor
+import { UsecaseReview } from '../../components/UsecaseReview';
+
+// Services & Types
+import { apiService, type BackendUseCase, type Step2Request, type ActorEntity } from '../../components/api';
 import { storageService, type ProjectSession } from '../../utils/storage';
 
 const { Sider, Content } = Layout;
@@ -19,106 +20,69 @@ export default function HomePage() {
   // 1. Session State
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ProjectSession | null>(null);
-  // 2. Application Flow State (Derived from Session)
-  const [phase, setPhase] = useState<'input' | 'actor-review' | 'diagram-scenario-review'>('input');
+
+  // 2. Flow State
+  const [phase, setPhase] = useState<'input' | 'actor-review' | 'usecase-review' | 'diagram-scenario-review'>('input');
+
   // 3. Data State
-  const [inputStoryText, setInputStoryText] = useState(''); // Text for Step 1
-  const [actors, setActors] = useState<Actor[]>([]); // Data for Step 2
-  // const [diagramNodes, setDiagramNodes] = useState<NodeData[]>([]); // Data for Step 3
-  // const [diagramLinks, setDiagramLinks] = useState<LinkData[]>([]);
-  // const [useCaseDetails, setUseCaseDetails] = useState<Record<number, UseCaseDetail>>({});
-  // UI State
+  const [inputStoryText, setInputStoryText] = useState('');
+  const [actors, setActors] = useState<UIActor[]>([]); // Uses UI Actor type
+  const [usecases, setUsecases] = useState<BackendUseCase[]>([]);
+
   const [isTyping, setIsTyping] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  // const [selectedUseCaseId, setSelectedUseCaseId] = useState<number | null>(null);
-  // const diagramRef = useRef<ReactDiagram>(null);
 
   // --- INITIALIZATION ---
   useEffect(() => {
     const loaded = storageService.getSessions();
     setSessions(loaded);
-    // Note: We don't auto-load the first session anymore, we start with a blank slate (New Chat)
   }, []);
+
   const handleNewChat = () => {
-    setCurrentSession(null); // Clear current session
-    setPhase('input'); // Reset phase
-    setInputStoryText(''); // Clear text
-    setActors([]); // Clear actors
+    setCurrentSession(null);
+    setPhase('input');
+    setInputStoryText('');
+    setActors([]);
+    setUsecases([]);
   };
 
   // --- SESSION HELPERS ---
-  // 2. LOAD EXISTING SESSION
   const loadSession = (session: ProjectSession) => {
     setCurrentSession(session);
     setPhase(session.currentPhase);
 
-    // Restore Step 1 Data
+    // Restore Step 1 (Actors)
     if (session.step1) {
       setInputStoryText(session.step1.initial.rawInput);
+      const sourceActors = session.step1.final ? session.step1.final.approvedActors : session.step1.initial.extractedActors;
+      const uiActors: UIActor[] = sourceActors.map((a, idx) => ({
+        ...a, // Spread actor, aliases, sentence_idx
+        id: (a as any).id || String(idx),
+        status: session.step1?.final ? 'approved' : 'candidate',
+      }));
 
-      // If we have Final (approved) actors, show those. Else show Initial (extracted).
-      const actorsToLoad = session.step1.final ? session.step1.final.approvedActors : session.step1.initial.extractedActors;
+      setActors(uiActors);
+    }
 
-      setActors(actorsToLoad);
+    // Restore Step 2 (Use Cases)
+    if (session.step2) {
+      const ucToLoad = session.step2.final ? session.step2.final.approvedUseCases : session.step2.initial.extractedUseCases;
+      setUsecases(ucToLoad);
     }
   };
 
-  // 3. DELETE SESSION
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     storageService.deleteSession(id);
     const remaining = storageService.getSessions();
     setSessions(remaining);
-
-    // If we deleted the active session, reset to new chat
     if (currentSession?.id === id) {
       handleNewChat();
     }
   };
 
-  // Simulate diagram generation from actors
-  // const simulateDiagramGeneration = (): Promise<void> => {
-  //   return new Promise((resolve) => {
-  //     const nodes: NodeData[] = [
-  //       { key: -99, label: 'Inventory Management System', isGroup: true },
-  //       { key: 1, category: 'Actor', label: 'Warehouse Staff' },
-  //       { key: 2, category: 'Actor', label: 'Manager' },
-  //       { key: 3, category: 'Usecase', label: 'Scan RFID Tag', group: -99 },
-  //       { key: 4, category: 'Usecase', label: 'Create Check Sheet', group: -99 },
-  //       { key: 5, category: 'Usecase', label: 'Approve Inventory', group: -99 },
-  //     ];
-  //     setDiagramNodes(nodes);
-  //     setDiagramLinks([
-  //       { key: -1, from: 1, to: 3 },
-  //       { key: -2, from: 1, to: 4 },
-  //       { key: -3, from: 4, to: 3, text: '<<include>>' },
-  //       { key: -4, from: 2, to: 5 },
-  //     ]);
-  //     const initialDetails: Record<number, UseCaseDetail> = {};
-  //     nodes.forEach((node) => {
-  //       if (node.category === 'Usecase') {
-  //         initialDetails[node.key] = {
-  //           id: node.key,
-  //           name: node.label,
-  //           actors: 'Warehouse Staff', // Simplified logic
-  //           description: `User wants to ${node.label} to ensure inventory accuracy.`,
-  //           preconditions: 'User is logged into the system.',
-  //           postconditions: 'Data is saved successfully.',
-  //           mainFlow: '1. User selects action.\n2. System validates.\n3. System performs action.',
-  //           alternativeFlow: '3a. If validation fails, show error.',
-  //           scores: {
-  //             completeness: Math.floor(Math.random() * (100 - 70) + 70), // Random 70-100
-  //             correctness: Math.floor(Math.random() * (100 - 80) + 80), // Random 80-100
-  //             relevance: Math.floor(Math.random() * (100 - 60) + 60), // Random 60-100
-  //           },
-  //         };
-  //       }
-  //     });
-  //     setUseCaseDetails(initialDetails);
-  //     resolve();
-  //   });
-  // };
   // --- HANDLERS ---
+  // STEP 1: SUBMIT STORIES
   const handleStructuredSubmit = async (fullText: string) => {
     if (!fullText.trim()) {
       antdMessage.warning('Please enter user stories.');
@@ -130,142 +94,119 @@ export default function HomePage() {
       .filter((s) => s.length > 0);
 
     setIsTyping(true);
-    antdMessage.loading({ content: 'Đang phân tích user stories...', key: 'analyzing', duration: 0 });
+    antdMessage.loading({ content: 'Analyzing user stories...', key: 'analyzing' });
+
     try {
-      // 3. Call the API
       const data = await apiService.extractActors(storiesList);
-      console.log(data);
+
       if (data.interrupt?.type === 'review_actors') {
-        const mappedActors = data.interrupt.actors.map((apiActor: BackendActor, index: number) => ({
+        // Map Backend Data -> UIActor
+        const mappedActors: UIActor[] = data.interrupt.actors.map((apiActor, index) => ({
+          ...apiActor, // This correctly copies 'actor', 'aliases', 'sentence_idx'
           id: String(index),
-          name: apiActor.actor,
-          alias: apiActor.aliases,
-          sentences_idx: apiActor.sentence_idx,
           status: 'candidate' as const,
         }));
 
         setActors(mappedActors);
-        setInputStoryText(fullText); // Keep text in sync
-        // SAVE STEP 1
+        setInputStoryText(fullText);
+        setPhase('actor-review');
+
+        // Create Session
         const newSession: ProjectSession = {
           id: data.thread_id,
-          name: `Project ${new Date().toLocaleTimeString()}`, // You can generate a better name later
+          name: `Project ${new Date().toLocaleTimeString()}`,
           lastModified: Date.now(),
           currentPhase: 'actor-review',
           step1: {
             initial: {
               rawInput: fullText,
-              extractedActors: mappedActors,
+              extractedActors: mappedActors, // Save initial state
             },
-            final: undefined, // Not confirmed yet
+            final: undefined,
           },
+          step2: null,
         };
+
         storageService.saveSession(newSession);
         setSessions(storageService.getSessions());
-        antdMessage.success({ content: 'Đã trích xuất actors!', key: 'analyzing' });
-        setPhase('actor-review');
+        setCurrentSession(newSession);
+
+        antdMessage.success({ content: 'Actors extracted!', key: 'analyzing' });
       }
-    } catch {
-      antdMessage.error({ content: 'Có lỗi xảy ra khi phân tích', key: 'analyzing' });
+    } catch (error) {
+      console.error(error);
+      antdMessage.error({ content: 'Failed to analyze stories', key: 'analyzing' });
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleActorConfirm = async (candidates: Actor[], approved: Actor[]) => {
-    setIsTyping(true);
-    antdMessage.loading({ content: 'Đang tạo diagram...', key: 'generating', duration: 0 });
-    console.log(candidates, approved);
+  // STEP 2: CONFIRM ACTORS -> GET USE CASES
+  const handleActorConfirm = async (candidates: ActorEntity[], approved: ActorEntity[]) => {
+    if (!currentSession) return;
 
-    try {
-      // await simulateDiagramGeneration();
-      antdMessage.success({ content: 'Đã tạo diagram!', key: 'generating' });
-      // setPhase('diagram-scenario-review');
-    } catch {
-      antdMessage.error({ content: 'Có lỗi xảy ra khi tạo diagram', key: 'generating' });
-    } finally {
-      setIsTyping(false);
-    }
+    // 1. Save Step 1 Final State
+    const step1FinalSession: ProjectSession = {
+      ...currentSession,
+      lastModified: Date.now(),
+      step1: {
+        ...currentSession.step1!,
+        final: {
+          candidateActors: candidates,
+          approvedActors: approved,
+        },
+      },
+    };
+    console.log(step1FinalSession);
+    // storageService.saveSession(step1FinalSession);
+    // setCurrentSession(step1FinalSession);
+
+    // // 2. Call API (No complex mapping needed anymore!)
+    // const requestPayload: Step2Request = {
+    //   thread_id: currentSession.id,
+    //   actors: approved,
+    // };
+    // antdMessage.loading({ content: 'Generating Use Cases...', key: 'generating' });
+    // try {
+    //   const data = await apiService.extractUseCases(requestPayload);
+
+    //   if (data.interrupt?.type === 'review_usecases') {
+    //     const extractedUC = data.interrupt.usecases;
+
+    //     // 4. Save Step 2 Initial State
+    //     const step2Session: ProjectSession = {
+    //       ...step1FinalSession,
+    //       currentPhase: 'usecase-review',
+    //       step2: {
+    //         initial: {
+    //           extractedUseCases: extractedUC,
+    //         },
+    //         final: undefined,
+    //       },
+    //     };
+
+    //     storageService.saveSession(step2Session);
+    //     setCurrentSession(step2Session);
+
+    //     // 5. Update UI
+    //     setUsecases(extractedUC);
+    //     setPhase('usecase-review');
+    //     antdMessage.success({ content: 'Use cases generated!', key: 'generating' });
+    //   }
+    // } catch {
+    //   antdMessage.error({ content: 'Failed to generate use cases', key: 'generating' });
+    // }
   };
 
-  const handleDiagramUpdate = (nodes: NodeData[], links: LinkData[]) => {
-    setDiagramNodes(nodes);
-    setDiagramLinks(links);
-  };
-
-  const handleDiagramConfirm = (finalNodes: NodeData[], finalLinks: LinkData[]) => {
-    // Might haven't check for delete action on the diagram
-    // 1. Create a copy of current details
-    const finalDetails = { ...useCaseDetails };
-
-    // 2. Loop through all nodes to check for missing details
-    finalNodes.forEach((node) => {
-      if (node.category === 'Usecase' && !finalDetails[node.key]) {
-        // Fill in the gap for unclicked nodes
-        finalDetails[node.key] = {
-          id: node.key,
-          name: node.label,
-          actors: '',
-          description: '',
-          preconditions: '',
-          postconditions: '',
-          mainFlow: '',
-          alternativeFlow: '',
-          scores: { completeness: 0, correctness: 0, relevance: 0 },
-        };
-      }
-    });
-    console.log(finalNodes, finalLinks);
-    console.log(finalDetails);
-    // setPhase('scenario-review');
-    antdMessage.success('Đã hoàn thành workflow!');
-  };
-
-  // Handle Selection
-  const handleNodeSelect = (key: number | null) => {
-    setSelectedUseCaseId(key);
-
-    // If a new node is dragged in (doesn't exist in details yet), create default data
-    if (key !== null && !useCaseDetails[key]) {
-      const node = diagramNodes.find((n) => n.key === key);
-      if (node) {
-        setUseCaseDetails((prev) => ({
-          ...prev,
-          [key]: {
-            id: key,
-            name: node.label,
-            actors: '',
-            description: '',
-            preconditions: '',
-            postconditions: '',
-            mainFlow: '',
-            alternativeFlow: '',
-            scores: { completeness: 0, correctness: 0, relevance: 0 },
-          },
-        }));
-      }
-    }
-  };
-
-  // Handle Detail Updates (Typing in the table)
-  const handleDetailUpdate = (updated: UseCaseDetail) => {
-    setUseCaseDetails((prev) => ({ ...prev, [updated.id]: updated }));
-
-    // Optional: Sync Name change back to Diagram Node Label
-    const node = diagramNodes.find((n) => n.key === updated.id);
-    if (node && node.label !== updated.name) {
-      setDiagramNodes((prev) => prev.map((n) => (n.key === updated.id ? { ...n, label: updated.name } : n)));
-    }
-  };
-
+  // --- RENDER HELPERS ---
   const steps = [
-    { title: 'Nhập yêu cầu', content: 'Nhập user stories' },
-    { title: 'Actor Review', content: 'Xem và chỉnh sửa actors' },
-    { title: 'Diagram & Scenario Review', content: 'Xem và chỉnh sửa diagram và scenario' },
-    { title: 'Hoàn thành', content: 'Kết quả cuối cùng' },
+    { title: 'Input', content: 'Enter user stories' },
+    { title: 'Actor', content: 'Review actors' },
+    { title: 'Usecase Review' },
+    { title: 'Diagram' },
   ];
 
-  const currentStep = phase === 'input' ? 0 : phase === 'actor-review' ? 1 : phase === 'diagram-scenario-review' ? 2 : 3;
+  const currentStep = phase === 'input' ? 0 : phase === 'actor-review' ? 1 : phase === 'usecase-review' ? 2 : 3;
 
   return (
     <Flex>
@@ -291,67 +232,43 @@ export default function HomePage() {
           ))}
         </Menu>
       </Sider>
-      <Flex vertical style={{ height: '100%', flex: 1, padding: '24px' }}>
-        <Flex justify="space-between" align="center" style={{ marginBottom: '16px' }}>
-          <h2 style={{ margin: 0 }}>Generative AI Use Case Diagram</h2>
-        </Flex>
 
-        <Steps current={currentStep} items={steps} style={{ marginBottom: '24px' }} />
+      {/* CONTENT */}
+      <Flex vertical style={{ height: '100%', flex: 1 }}>
+        <Content style={{ padding: '24px', background: '#fff', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ marginTop: 0 }}>Generative AI Use Case Diagram</h2>
+            <Steps current={currentStep} items={steps} style={{ marginBottom: '24px' }} />
+          </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          {phase === 'input' && (
-            <Flex vertical gap="large" style={{ padding: '16px', height: '100%', minHeight: 0 }}>
-              <StructuredInput onSubmit={handleStructuredSubmit} isSubmitting={isTyping} initialValue={inputStoryText} />
-            </Flex>
-          )}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* PHASE 1: INPUT */}
+            {phase === 'input' && <StructuredInput onSubmit={handleStructuredSubmit} isSubmitting={isTyping} />}
 
-          {phase === 'actor-review' && <ActorReview actors={actors} onConfirm={handleActorConfirm} />}
+            {/* PHASE 2: ACTOR REVIEW */}
+            {phase === 'actor-review' && <ActorReview actors={actors} rawStoryText={inputStoryText} onConfirm={handleActorConfirm} />}
 
-          {/* {phase === 'diagram-scenario-review' && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div style={{ display: 'flex', height: '500px', position: 'relative' }}>
-                <DiagramPalette />
-                <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
-                  <button
-                    onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
-                    style={{
-                      position: 'absolute',
-                      zIndex: 10,
-                      top: 10,
-                      right: 10,
-                      backgroundColor: '#52c41a',
-                      color: 'white',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Confirm Diagram
-                  </button>
-                  <DiagramWrapper
-                    ref={diagramRef}
-                    nodeDataArray={diagramNodes}
-                    linkDataArray={diagramLinks}
-                    onModelChange={handleDiagramUpdate}
-                    onNodeSelect={handleNodeSelect} // <--- Pass the listener here!
-                  />
-                </div>
+            {/* PHASE 3: USECASE REVIEW */}
+            {/* {phase === 'usecase-review' && (
+              <UsecaseReview
+                usecases={usecases}
+                onConfirm={() => {
+                  console.log('Next step: Diagram');
+                  setPhase('diagram-scenario-review');
+                }}
+              />
+            )} */}
+
+            {/* PHASE 4: DIAGRAM (Placeholder) */}
+            {phase === 'diagram-scenario-review' && (
+              <div style={{ textAlign: 'center', marginTop: 50 }}>
+                <h3>Diagram Generation Phase</h3>
+                <p>Session ID: {currentSession?.id}</p>
+                <Button onClick={() => setPhase('usecase-review')}>Back to Usecases</Button>
               </div>
-
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 20 }}>
-                <UseCaseDetailEditor data={selectedUseCaseId ? useCaseDetails[selectedUseCaseId] : null} onUpdate={handleDetailUpdate} />
-              </div>
-            </div>
-          )} */}
-
-          {/* {phase === 'final' && (
-            <div style={{ padding: '16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <h3>Diagram cuối cùng</h3>
-              <DiagramWrapper nodeData={diagramNodes} linkData={diagramLinks} onConfirm={handleDiagramConfirm} readonly />
-            </div>
-          )} */}
-        </div>
+            )}
+          </div>
+        </Content>
       </Flex>
     </Flex>
   );

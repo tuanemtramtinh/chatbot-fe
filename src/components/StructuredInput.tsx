@@ -3,7 +3,7 @@
 // All field are required
 // src/components/StructuredInput.tsx
 import { Input, Form, Button, Flex, Typography, Select, Card, Divider, Tooltip, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { KeywordSuggester } from './KeywordSuggester';
 import { DeleteOutlined, PlusOutlined, SendOutlined, InfoCircleOutlined, SwapOutlined } from '@ant-design/icons';
 import Paragraph from 'antd/es/typography/Paragraph';
@@ -77,7 +77,6 @@ interface Block {
 interface StructuredInputProps {
   onSubmit: (fullText: string) => void;
   isSubmitting?: boolean;
-  initialValue?: string;
 }
 
 // --- PARSER HELPER ---
@@ -131,7 +130,7 @@ const parseParagraphToBlocks = (text: string): Block[] => {
   });
 };
 
-export const StructuredInput = ({ onSubmit, isSubmitting, initialValue }: StructuredInputProps) => {
+export const StructuredInput = ({ onSubmit, isSubmitting }: StructuredInputProps) => {
   // Initialize with one default User Story block
   const [blocks, setBlocks] = useState<Block[]>(() => [
     {
@@ -143,14 +142,6 @@ export const StructuredInput = ({ onSubmit, isSubmitting, initialValue }: Struct
   ]);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  useEffect(() => {
-    if (initialValue && initialValue.trim().length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBulkText(initialValue);
-      const parsed = parseParagraphToBlocks(initialValue);
-      setBlocks(parsed);
-    }
-  }, [initialValue]);
 
   // --- ACTIONS ---
   const handleToggleMode = () => {
