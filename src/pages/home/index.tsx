@@ -17,12 +17,14 @@ import {
   type Step3Request,
   type DiagramNode,
   type DiagramLink,
+  type Step4Request,
+  type UseCaseDetail,
 } from '../../components/api';
 import { storageService, type ProjectSession } from '../../utils/storage';
 import { DiagramWrapper } from '../../components/DiagramWrapper';
 import { DiagramPalette } from '../../components/DiagramPalette';
 import type { ReactDiagram } from 'gojs-react';
-import { UseCaseDetailEditor, type UseCaseDetail } from '../../components/ScenarioReview';
+import { UseCaseDetailEditor } from '../../components/ScenarioReview';
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -42,10 +44,8 @@ export default function HomePage() {
   const [diagramNodes, setDiagramNodes] = useState<DiagramNode[]>([]);
   const [diagramLinks, setDiagramLinks] = useState<DiagramLink[]>([]);
   const diagramRef = useRef<ReactDiagram>(null);
-  const [useCaseDetails, setUseCaseDetails] = useState<Record<number, UseCaseDetail>>({});
-  const [selectedUseCaseId, setSelectedUseCaseId] = useState<number | null>(null);
-
-  const initialDetails: Record<number, UseCaseDetail> = {};
+  const [useCaseDetails, setUseCaseDetails] = useState<Record<string, UseCaseDetail>>({});
+  const [selectedUseCaseId, setSelectedUseCaseId] = useState<number | string | null>(null);
 
   const [isTyping, setIsTyping] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -90,6 +90,13 @@ export default function HomePage() {
     if (session.step3) {
       setDiagramNodes(session.step3.initial.nodes);
       setDiagramLinks(session.step3.initial.links);
+    }
+    if (session.step4) {
+      const loaded = session.step4.final ? session.step4.final.scenarios : session.step4.initial.scenarios;
+      // Convert Array -> Map
+      const map: Record<string, UseCaseDetail> = {};
+      loaded.forEach((s) => (map[s.id] = s));
+      setUseCaseDetails(map);
     }
   };
 
@@ -148,6 +155,7 @@ export default function HomePage() {
           },
           step2: null,
           step3: null,
+          step4: null,
         };
 
         storageService.saveSession(newSession);
@@ -267,11 +275,96 @@ export default function HomePage() {
     }
   };
 
-  const handleDiagramConfirm = async (userDiagramNodes: DiagramNode[], userDiagramLinks: DiagramLink[]) => {
-    console.log(userDiagramNodes, userDiagramLinks);
+  const handleDiagramConfirm = async () => {
+    if (!currentSession) return;
+
+    // 1. Save Step 3 Final (The Diagram Layout)
+    const step3FinalSession: ProjectSession = {
+      ...currentSession,
+      lastModified: Date.now(),
+      step3: {
+        ...currentSession.step3!,
+        final: { nodes: diagramNodes, links: diagramLinks },
+      },
+    };
+    console.log(step3FinalSession);
+    // storageService.saveSession(step3FinalSession);
+    // setCurrentSession(step3FinalSession);
+
+    // 2. Prepare Payload
+    const requestPayload: Step4Request = {
+      thread_id: currentSession.id,
+      nodes: diagramNodes,
+    };
+    const stopLoading = antdMessage.loading({ content: 'Generating Scenarios...', key: 'gen_scenario', duration: 0 });
+
+    try {
+      // 3. Call API (This currently hits the Mock function in api.ts)
+      const data = await apiService.generateScenarios(requestPayload);
+
+      if (data.interrupt?.type === 'review_scenarios') {
+        const generatedScenarios = data.interrupt.scenarios;
+
+        // Convert Array to Map for easier lookup
+        const map: Record<string, UseCaseDetail> = {};
+        generatedScenarios.forEach((s) => (map[s.id] = s));
+
+        // 4. Save Step 4 Initial
+        const step4Session: ProjectSession = {
+          ...step3FinalSession,
+          currentPhase: 'diagram-scenario-review',
+          step4: {
+            initial: { scenarios: generatedScenarios },
+            final: undefined,
+          },
+        };
+        console.log(step4Session);
+        // storageService.saveSession(step4Session);
+        // setCurrentSession(step4Session);
+
+        // 5. Update UI
+        setUseCaseDetails(map);
+        antdMessage.success({ content: 'Scenarios Generated!', key: 'gen_scenario', duration: 2 });
+      }
+    } catch (e) {
+      console.error(e);
+      antdMessage.error({ content: 'Failed to generate scenarios', key: 'gen_scenario' });
+    } finally {
+      stopLoading();
+    }
   };
-  const handleNodeSelect = () => {};
-  const handleDetailUpdate = () => {};
+  const handleNodeSelect = (key: string | number | null) => {
+    setSelectedUseCaseId(key);
+    // If a new node is dragged in (doesn't exist in details yet), create default data
+    if (key !== null && !useCaseDetails[String(key)]) {
+      const node = diagramNodes.find((n) => n.key === key);
+      if (node) {
+        setUseCaseDetails((prev) => ({
+          ...prev,
+          [key]: {
+            id: key,
+            name: node.label,
+            actors: '',
+            description: '',
+            preconditions: '',
+            postconditions: '',
+            mainFlow: '',
+            alternativeFlow: '',
+            scores: { completeness: 0, correctness: 0, relevance: 0 },
+          },
+        }));
+      }
+    }
+  };
+  const handleDetailUpdate = (updated: UseCaseDetail) => {
+    setUseCaseDetails((prev) => ({ ...prev, [String(updated.id)]: updated }));
+
+    // Optional: Sync Name change back to Diagram Node Label
+    const node = diagramNodes.find((n) => n.key === updated.id);
+    if (node && node.label !== updated.name) {
+      setDiagramNodes((prev) => prev.map((n) => (n.key === updated.id ? { ...n, label: updated.name } : n)));
+    }
+  };
 
   // --- RENDER HELPERS ---
   const steps = [
@@ -334,7 +427,7 @@ export default function HomePage() {
                   <DiagramPalette />
                   <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
                     <button
-                      onClick={() => handleDiagramConfirm(diagramNodes, diagramLinks)}
+                      onClick={handleDiagramConfirm}
                       style={{
                         position: 'absolute',
                         zIndex: 10,
@@ -354,7 +447,10 @@ export default function HomePage() {
                       ref={diagramRef}
                       nodeDataArray={diagramNodes}
                       linkDataArray={diagramLinks}
-                      onModelChange={() => {}}
+                      onModelChange={(nodes, links) => {
+                        setDiagramNodes(nodes);
+                        setDiagramLinks(links);
+                      }}
                       onNodeSelect={handleNodeSelect} // <--- Pass the listener here!
                     />
                   </div>
@@ -362,7 +458,7 @@ export default function HomePage() {
 
                 {/* Bottom Half: Detail Editor */}
                 <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 20 }}>
-                  <UseCaseDetailEditor data={selectedUseCaseId ? useCaseDetails[selectedUseCaseId] : null} onUpdate={handleDetailUpdate} />
+                  <UseCaseDetailEditor data={selectedUseCaseId ? useCaseDetails[String(selectedUseCaseId)] : null} onUpdate={handleDetailUpdate} />
                 </div>
               </div>
             )}

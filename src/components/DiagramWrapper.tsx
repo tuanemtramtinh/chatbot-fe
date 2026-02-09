@@ -206,7 +206,14 @@ const initDiagram = () => {
       new go.Binding('strokeDashArray', 'text', (t) => (t === '<<include>>' || t === '<<extend>>' ? [4, 4] : null)),
     ),
     // Mũi tên
-    $(go.Shape, { toArrow: 'OpenTriangle' }), // Mũi tên mở đặc trưng UML Use Case
+    $(
+      go.Shape,
+      { toArrow: '' }, // Default: No arrow (for normal associations)
+      new go.Binding('toArrow', 'text', (t) => {
+        // Only show arrow if it is a relationship type
+        return t === '<<include>>' || t === '<<extend>>' ? 'OpenTriangle' : '';
+      }),
+    ),
     // Label hiển thị <<include>> hoặc <<extend>>
     $(
       go.Panel,
@@ -258,7 +265,7 @@ export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref
     }
   });
   const handleModelChange = (changes: go.IncrementalData) => {
-    console.log(changes);
+    // console.log(changes);
     // 1. Check if we have the Diagram reference
     if (ref && 'current' in ref && ref.current) {
       const diagram = ref.current.getDiagram();

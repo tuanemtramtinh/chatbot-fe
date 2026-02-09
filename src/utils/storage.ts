@@ -1,5 +1,5 @@
 // src/types/storage.ts
-import type { ActorEntity, BackendUseCase, DiagramLink, DiagramNode } from '../components/api';
+import type { ActorEntity, BackendUseCase, DiagramLink, DiagramNode, UseCaseDetail } from '../components/api';
 
 // Data for Step 1
 export interface Step1Data {
@@ -27,6 +27,11 @@ export interface Step3Data {
   final?: { nodes: DiagramNode[]; links: DiagramLink[] };
 }
 
+export interface Step4Data {
+  initial: { scenarios: UseCaseDetail[] };
+  final?: { scenarios: UseCaseDetail[] };
+}
+
 // The Master Session Object
 export interface ProjectSession {
   id: string;
@@ -37,6 +42,7 @@ export interface ProjectSession {
   step1: Step1Data | null;
   step2: Step2Data | null;
   step3: Step3Data | null;
+  step4: Step4Data | null;
 }
 
 const STORAGE_KEY = 'genai_project_sessions';

@@ -45,6 +45,22 @@ export interface DiagramLink {
   text?: string; // Label like <<include>>
 }
 
+export interface UseCaseDetail {
+  id: string | number;
+  name: string;
+  actors: string;
+  description: string;
+  preconditions: string;
+  postconditions: string;
+  mainFlow: string;
+  alternativeFlow: string;
+  scores: {
+    completeness: number; // 0-100
+    correctness: number; // 0-100
+    relevance: number; // 0-100
+  };
+}
+
 // --- API RESPONSE TYPES ---
 export interface Step1Response {
   thread_id: string;
@@ -74,7 +90,18 @@ export interface Step3Response {
   nodes: DiagramNode[];
   links: DiagramLink[];
 }
+export interface Step4Request {
+  thread_id: string;
+  nodes: DiagramNode[]; // We send the finalized diagram nodes to context
+}
 
+export interface Step4Response {
+  thread_id: string;
+  interrupt: {
+    type: 'review_scenarios';
+    scenarios: UseCaseDetail[];
+  };
+}
 // --- SERVICE ---
 
 export const apiService = {
@@ -125,5 +152,40 @@ export const apiService = {
     const data = await response.json();
     console.log('Diagram Return:', data);
     return data;
+  },
+
+  generateScenarios: async (payload: Step4Request): Promise<Step4Response> => {
+    console.log('Mocking Scenario Generation for:', payload.nodes.length, 'nodes');
+
+    // Simulate Network Delay
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Filter only UseCase nodes
+    const useCaseNodes = payload.nodes.filter((n) => n.category === 'Usecase');
+
+    // Generate Mock Data
+    const mockScenarios: UseCaseDetail[] = useCaseNodes.map((node) => ({
+      id: node.key,
+      name: node.label,
+      actors: 'User, System',
+      description: `Detailed specification for ${node.label}.`,
+      preconditions: 'User must be logged in.',
+      postconditions: 'Data is saved to database.',
+      mainFlow: '1. User initiates action.\n2. System validates input.\n3. System performs task.\n4. System returns success message.',
+      alternativeFlow: '3a. Validation fails: System shows error.',
+      scores: {
+        completeness: Math.floor(Math.random() * 20) + 80, // 80-99
+        correctness: Math.floor(Math.random() * 20) + 80,
+        relevance: Math.floor(Math.random() * 20) + 80,
+      },
+    }));
+
+    return {
+      thread_id: payload.thread_id,
+      interrupt: {
+        type: 'review_scenarios',
+        scenarios: mockScenarios,
+      },
+    };
   },
 };
