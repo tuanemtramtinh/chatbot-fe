@@ -39,6 +39,7 @@ const initDiagram = () => {
     'Vertical',
     { locationSpot: go.Spot.Center },
     new go.Binding('location', 'loc', go.Point.parse).makeTwoWay(go.Point.stringify),
+    new go.Binding('isLayoutPositioned', 'loc', (val) => !val),
     // Stick figure
     $(go.Shape, {
       geometryString: 'F M25 0 A10 10 0 1 1 25 20 A10 10 0 1 1 25 0 M25 20 L25 50 M5 30 L45 30 M10 70 L25 50 L40 70',
@@ -74,6 +75,7 @@ const initDiagram = () => {
     'Auto',
     { locationSpot: go.Spot.Center },
     new go.Binding('location', 'loc', go.Point.parse).makeTwoWay(go.Point.stringify),
+    new go.Binding('isLayoutPositioned', 'loc', (val) => !val),
     // Oval shape
     $(go.Shape, 'Ellipse', {
       fill: 'white',
@@ -105,7 +107,7 @@ const initDiagram = () => {
     go.Group,
     'Auto',
     {
-      layout: $(go.GridLayout, { wrappingColumn: 1, spacing: new go.Size(50, 50) }),
+      // layout: $(go.GridLayout, { wrappingColumn: 1, spacing: new go.Size(50, 50) }),
       padding: 10,
       mouseDrop: (_e: go.InputEvent, grp: go.GraphObject) => {
         const group = grp as go.Group;
@@ -229,13 +231,13 @@ const initDiagram = () => {
 export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref) => {
   const diagramRef = useRef<go.Diagram | null>(null);
 
-  // [NEW] 1. Create a Ref to store the latest callback to avoid stale closures
+  // 1. Create a Ref to store the latest callback to avoid stale closures
   const onNodeSelectRef = useRef(props.onNodeSelect);
   useEffect(() => {
     onNodeSelectRef.current = props.onNodeSelect;
   }, [props.onNodeSelect]);
 
-  // [NEW] 2. Add the Event Listener
+  // 2. Add the Event Listener
   useEffect(() => {
     if (ref && 'current' in ref && ref.current) {
       const diagram = ref.current.getDiagram();
@@ -264,7 +266,8 @@ export const DiagramWrapper = forwardRef<ReactDiagram, DiagramProps>((props, ref
       }
     }
   });
-  const handleModelChange = (changes: go.IncrementalData) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleModelChange = (_changes: go.IncrementalData) => {
     // console.log(changes);
     // 1. Check if we have the Diagram reference
     if (ref && 'current' in ref && ref.current) {

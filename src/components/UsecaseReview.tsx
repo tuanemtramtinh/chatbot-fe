@@ -7,7 +7,7 @@ const { Title, Text } = Typography;
 
 interface UsecaseReviewProps {
   usecases: BackendUseCase[];
-  // Updated: Returns just the final list of use cases
+  // Returns just the final list of use cases
   onConfirm: (finalList: BackendUseCase[]) => void;
 }
 

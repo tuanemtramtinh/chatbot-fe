@@ -123,7 +123,7 @@ export const UseCaseDetailEditor = ({ data, onUpdate }: UseCaseDetailEditorProps
             Specification: {editingData.name}
           </Title>
 
-          {/* --- NEW: SCOREBOARD SECTION --- */}
+          {/* --- SCOREBOARD SECTION --- */}
           <Flex gap="large" align="center" style={{ fontSize: '12px' }}>
             <Tooltip title="Does the scenario cover all necessary steps?">
               <Flex gap="small" align="center">

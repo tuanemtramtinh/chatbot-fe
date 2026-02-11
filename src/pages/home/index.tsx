@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react';
 import { Button, Flex, Layout, Menu, Steps, Typography, message as antdMessage } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, FilePdfOutlined, PlusOutlined } from '@ant-design/icons';
+import * as go from 'gojs';
 
 // Components
 import StructuredInput from '../../components/StructuredInput';
@@ -25,6 +26,7 @@ import { DiagramWrapper } from '../../components/DiagramWrapper';
 import { DiagramPalette } from '../../components/DiagramPalette';
 import type { ReactDiagram } from 'gojs-react';
 import { UseCaseDetailEditor } from '../../components/ScenarioReview';
+import { generateProjectPDF } from '../../utils/pdfExport';
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -54,7 +56,7 @@ export default function HomePage() {
   useEffect(() => {
     const loaded = storageService.getSessions();
     setSessions(loaded);
-  }, []);
+  }, [currentSession]);
 
   const handleNewChat = () => {
     setCurrentSession(null);
@@ -62,6 +64,7 @@ export default function HomePage() {
     setInputStoryText('');
     setActors([]);
     setUsecases([]);
+    setUseCaseDetails({});
   };
 
   // --- SESSION HELPERS ---
@@ -88,8 +91,10 @@ export default function HomePage() {
       setUsecases(ucToLoad);
     }
     if (session.step3) {
-      setDiagramNodes(session.step3.initial.nodes);
-      setDiagramLinks(session.step3.initial.links);
+      const nodeToLoad = session.step3.final ? session.step3.final.nodes : session.step3.initial.nodes;
+      const linkToLoad = session.step3.final ? session.step3.final.links : session.step3.initial.links;
+      setDiagramNodes(nodeToLoad);
+      setDiagramLinks(linkToLoad);
     }
     if (session.step4) {
       const loaded = session.step4.final ? session.step4.final.scenarios : session.step4.initial.scenarios;
@@ -288,8 +293,8 @@ export default function HomePage() {
       },
     };
     console.log(step3FinalSession);
-    // storageService.saveSession(step3FinalSession);
-    // setCurrentSession(step3FinalSession);
+    storageService.saveSession(step3FinalSession);
+    setCurrentSession(step3FinalSession);
 
     // 2. Prepare Payload
     const requestPayload: Step4Request = {
@@ -319,8 +324,8 @@ export default function HomePage() {
           },
         };
         console.log(step4Session);
-        // storageService.saveSession(step4Session);
-        // setCurrentSession(step4Session);
+        storageService.saveSession(step4Session);
+        setCurrentSession(step4Session);
 
         // 5. Update UI
         setUseCaseDetails(map);
@@ -334,6 +339,7 @@ export default function HomePage() {
     }
   };
   const handleNodeSelect = (key: string | number | null) => {
+    if (Object.keys(useCaseDetails).length == 0) return;
     setSelectedUseCaseId(key);
     // If a new node is dragged in (doesn't exist in details yet), create default data
     if (key !== null && !useCaseDetails[String(key)]) {
@@ -364,6 +370,79 @@ export default function HomePage() {
     if (node && node.label !== updated.name) {
       setDiagramNodes((prev) => prev.map((n) => (n.key === updated.id ? { ...n, label: updated.name } : n)));
     }
+  };
+
+  const handleExportReport = () => {
+    if (!currentSession) return;
+
+    const finalSession: ProjectSession = {
+      ...currentSession,
+      lastModified: Date.now(),
+      // Save the latest diagram position
+      step3: {
+        ...currentSession.step3!,
+        final: { nodes: diagramNodes, links: diagramLinks },
+      },
+      // Save the latest scenario text edits
+      step4: {
+        ...currentSession.step4!,
+        final: { scenarios: Object.values(useCaseDetails) },
+      },
+    };
+
+    // Write to Storage
+    console.log(finalSession);
+    storageService.saveSession(finalSession);
+    setCurrentSession(finalSession);
+
+    // 1. Capture Diagram Image
+    let diagramImage: string | null = null;
+    if (diagramRef.current) {
+      const diagram = diagramRef.current.getDiagram();
+      if (diagram) {
+        diagramImage = diagram.makeImageData({
+          scale: 2, // High resolution for print
+          background: 'white',
+          returnType: 'image/jpeg',
+          maxSize: new go.Size(2000, 2000),
+        }) as string;
+      }
+    }
+
+    // 2. Gather Data
+    // Convert the map of scenarios back to a list
+    const scenarioList = Object.values(useCaseDetails);
+
+    // Filter for approved actors (the ones actually used in the project)
+    const approvedActors = actors.map((a) => ({
+      name: a.actor,
+      aliases: a.aliases.map((al) => al.alias),
+    }));
+
+    // 3. Prepare Payload
+    const exportData = {
+      projectName: currentSession.name,
+      stories: inputStoryText,
+      actors: approvedActors,
+      scenarios: scenarioList,
+      diagramImage: diagramImage,
+    };
+
+    // 4. Generate PDF
+    const stopLoading = antdMessage.loading({ content: 'Generating Report...', key: 'pdf', duration: 0 });
+
+    // Use a small timeout to let the UI render the loading state
+    setTimeout(() => {
+      try {
+        generateProjectPDF(exportData);
+        antdMessage.success({ content: 'Report Downloaded!', key: 'pdf' });
+      } catch (e) {
+        console.error(e);
+        antdMessage.error({ content: 'Export Failed', key: 'pdf' });
+      } finally {
+        stopLoading();
+      }
+    }, 100);
   };
 
   // --- RENDER HELPERS ---
@@ -424,9 +503,42 @@ export default function HomePage() {
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Top Half: Diagram */}
                 <div style={{ display: 'flex', height: '500px', position: 'relative' }}>
-                  <DiagramPalette />
+                  <DiagramPalette candidateActors={currentSession?.step1?.final?.candidateActors ?? []} />
                   <div style={{ flex: 1, position: 'relative', height: '100%', overflow: 'hidden' }}>
-                    <button
+                    {/* TOOLBAR: Top Right */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        zIndex: 10,
+                        top: 10,
+                        right: 10,
+                        display: 'flex',
+                        gap: 8,
+                      }}
+                    >
+                      {/* 1. Generate / Update Scenarios Button */}
+                      {Object.keys(useCaseDetails).length == 0 && (
+                        <Button
+                          type="primary"
+                          onClick={handleDiagramConfirm}
+                          style={{
+                            backgroundColor: '#52c41a',
+                            borderColor: '#52c41a',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          }}
+                        >
+                          'Confirm & Generate Scenarios'
+                        </Button>
+                      )}
+
+                      {/* 2. Export Button (Only visible after scenarios are generated) */}
+                      {Object.keys(useCaseDetails).length > 0 && (
+                        <Button type="primary" icon={<FilePdfOutlined />} onClick={handleExportReport} style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                          Export Report
+                        </Button>
+                      )}
+                    </div>
+                    {/* <button
                       onClick={handleDiagramConfirm}
                       style={{
                         position: 'absolute',
@@ -442,7 +554,7 @@ export default function HomePage() {
                       }}
                     >
                       Confirm Diagram
-                    </button>
+                    </button> */}
                     <DiagramWrapper
                       ref={diagramRef}
                       nodeDataArray={diagramNodes}
@@ -450,8 +562,26 @@ export default function HomePage() {
                       onModelChange={(nodes, links) => {
                         setDiagramNodes(nodes);
                         setDiagramLinks(links);
+                        setUseCaseDetails((prev) => {
+                          const newDetails = { ...prev };
+                          let hasChanges = false;
+
+                          // Get list of current valid IDs
+                          const validNodeIds = new Set(nodes.map((n) => String(n.key)));
+
+                          // Check existing details
+                          Object.keys(newDetails).forEach((key) => {
+                            if (!validNodeIds.has(key)) {
+                              delete newDetails[key]; // Delete the orphan data
+                              hasChanges = true;
+                            }
+                          });
+
+                          // Only update state if something actually changed to prevent re-renders
+                          return hasChanges ? newDetails : prev;
+                        });
                       }}
-                      onNodeSelect={handleNodeSelect} // <--- Pass the listener here!
+                      onNodeSelect={handleNodeSelect}
                     />
                   </div>
                 </div>

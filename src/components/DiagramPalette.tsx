@@ -2,12 +2,11 @@
 import { ReactPalette } from 'gojs-react';
 import * as go from 'gojs';
 import './DiagramWrapper.css';
+import type { ActorEntity } from './api';
 
-// 1. Define the data outside initPalette
-const PALETTE_DATA = [
-  { key: 'P-1', category: 'Actor', label: 'Actor' },
-  { key: 'P-2', category: 'Usecase', label: 'Use Case', group: -99 },
-];
+interface DiagramPaletteProps {
+  candidateActors: ActorEntity[]; // Receive the list of candidate actors
+}
 
 const initPalette = () => {
   const $ = go.GraphObject.make;
@@ -19,7 +18,7 @@ const initPalette = () => {
       cellSize: new go.Size(50, 50),
       spacing: new go.Size(20, 20),
     }),
-    contentAlignment: go.Spot.TopCenter,
+    contentAlignment: go.Spot.Center,
     // 2. Just define the Model type here, don't pass data
     model: $(go.GraphLinksModel, {
       linkKeyProperty: 'key',
@@ -39,7 +38,7 @@ const initPalette = () => {
         stroke: 'black',
         strokeWidth: 2,
         desiredSize: new go.Size(50, 70),
-        margin: new go.Margin(70, 0, 0, 0),
+        // margin: new go.Margin(70, 0, 0, 0),
       }),
       $(go.TextBlock, { margin: 5, font: 'bold 11pt sans-serif' }, new go.Binding('text', 'label')),
     ),
@@ -64,7 +63,16 @@ const initPalette = () => {
   return palette;
 };
 
-export const DiagramPalette = () => {
+export const DiagramPalette = ({ candidateActors }: DiagramPaletteProps) => {
+  const PALETTE_DATA = [
+    { key: 'P-1', category: 'Actor', label: 'Actor' },
+    { key: 'P-2', category: 'Usecase', label: 'Use Case', group: -99 },
+  ];
+  const candidateItems = candidateActors.map((actor) => ({
+    key: `CAND_${new Date().toLocaleTimeString()}`, // Unique key prefix
+    category: 'Actor',
+    label: actor.actor, // The name
+  }));
   return (
     <div style={{ width: '150px', marginRight: '10px', backgroundColor: '#f0f2f5' }}>
       <ReactPalette
@@ -72,7 +80,7 @@ export const DiagramPalette = () => {
         style={{ marginTop: -65 }}
         divClassName="palette-component"
         // 3. Pass data via props to satisfy TypeScript
-        nodeDataArray={PALETTE_DATA}
+        nodeDataArray={[...PALETTE_DATA, ...candidateItems]}
         linkDataArray={[]}
       />
     </div>
