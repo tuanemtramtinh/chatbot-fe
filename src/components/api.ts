@@ -1,25 +1,23 @@
 // src/components/api.ts
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
-// --- SHARED CORE TYPES ---
+// --- Actor types ---
 export interface AliasEntity {
   alias: string;
   sentences: number[];
 }
-
 export interface ActorEntity {
   actor: string;
   aliases: AliasEntity[];
   sentence_idx: number[];
 }
-// --- STEP 2 SPECIFIC TYPES ---
+// Usecase
 export interface BackendUserStory {
   actor: string;
   action: string;
   original_sentence: string;
   sentence_idx: number;
 }
-
 export interface BackendUseCase {
   id: number;
   name: string;
@@ -28,7 +26,7 @@ export interface BackendUseCase {
   user_stories: BackendUserStory[];
   relationships?: { type: string; target_use_case: string }[];
 }
-
+// Diagram
 export interface DiagramNode {
   key: string | number; // Support both for flexibility
   category: 'Actor' | 'Usecase';
@@ -37,27 +35,66 @@ export interface DiagramNode {
   isGroup?: boolean;
   group?: string | number;
 }
-
 export interface DiagramLink {
   key?: string | number;
   from: string | number;
   to: string | number;
   text?: string; // Label like <<include>>
 }
+// Scenario
+interface RawUseCaseSpec {
+  use_case_name: string;
+  unique_id: string;
+  area: string;
+  context_of_use: string;
+  scope: string;
+  level: string;
+  primary_actors: string[];
+  supporting_actors: string[];
+  stakeholders_and_interests: string[];
+  description: string;
+  triggering_event: string;
+  trigger_type: string;
+  preconditions: string[];
+  postconditions: string[];
+  assumptions: string[];
+  requirements_met: string[];
+  priority: string;
+  risk: string;
+  outstanding_issues: string[];
+  main_flow: string[];
+  alternative_flows: string[];
+  exception_flows: string[];
+  information_for_steps: string[];
+}
+
+interface RawEvaluation {
+  completeness: { score: number };
+  correctness: { score: number | null };
+  relevance: { score: number };
+}
+
+export interface RawScenarioResult {
+  use_case: BackendUseCase;
+  use_case_spec_json: RawUseCaseSpec;
+  evaluation: RawEvaluation;
+}
 
 export interface UseCaseDetail {
-  id: string | number;
+  id: string;
   name: string;
   actors: string;
   description: string;
+  trigger: string;
   preconditions: string;
   postconditions: string;
   mainFlow: string;
   alternativeFlow: string;
+  exceptionFlow: string;
   scores: {
-    completeness: number; // 0-100
-    correctness: number; // 0-100
-    relevance: number; // 0-100
+    completeness: number;
+    correctness: number;
+    relevance: number;
   };
 }
 
@@ -92,15 +129,12 @@ export interface Step3Response {
 }
 export interface Step4Request {
   thread_id: string;
-  nodes: DiagramNode[]; // We send the finalized diagram nodes to context
 }
 
 export interface Step4Response {
   thread_id: string;
-  interrupt: {
-    type: 'review_scenarios';
-    scenarios: UseCaseDetail[];
-  };
+  count: number;
+  results: RawScenarioResult[];
 }
 // --- SERVICE ---
 
@@ -155,37 +189,15 @@ export const apiService = {
   },
 
   generateScenarios: async (payload: Step4Request): Promise<Step4Response> => {
-    console.log('Mocking Scenario Generation for:', payload.nodes.length, 'nodes');
-
-    // Simulate Network Delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Filter only UseCase nodes
-    const useCaseNodes = payload.nodes.filter((n) => n.category === 'Usecase');
-
-    // Generate Mock Data
-    const mockScenarios: UseCaseDetail[] = useCaseNodes.map((node) => ({
-      id: node.key,
-      name: node.label,
-      actors: 'User, System',
-      description: `Detailed specification for ${node.label}.`,
-      preconditions: 'User must be logged in.',
-      postconditions: 'Data is saved to database.',
-      mainFlow: '1. User initiates action.\n2. System validates input.\n3. System performs task.\n4. System returns success message.',
-      alternativeFlow: '3a. Validation fails: System shows error.',
-      scores: {
-        completeness: Math.floor(Math.random() * 20) + 80, // 80-99
-        correctness: Math.floor(Math.random() * 20) + 80,
-        relevance: Math.floor(Math.random() * 20) + 80,
-      },
-    }));
-
-    return {
-      thread_id: payload.thread_id,
-      interrupt: {
-        type: 'review_scenarios',
-        scenarios: mockScenarios,
-      },
-    };
+    console.log('Sending Step 4 Payload:', JSON.stringify(payload, null, 2));
+    const response = await fetch(`${API_BASE_URL}/chat/step-4`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error((await response.json()).detail || response.statusText);
+    const data = await response.json();
+    console.log('Scenario Return:', data);
+    return data;
   },
 };

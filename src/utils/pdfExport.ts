@@ -12,6 +12,15 @@ interface ExportData {
   diagramImage: string | null; // Base64 image from GoJS
 }
 
+const cleanText = (text: string | undefined | null): string => {
+  if (!text) return '';
+  return text
+    .replace(/→/g, '->') // Replace Right Arrow
+    .replace(/←/g, '<-') // Replace Left Arrow
+    .replace(/•/g, '-') // Replace Bullets
+    .replace(/[^\x20-\x7E\n]/g, ''); // Optional: Remove other non-ASCII chars if issues persist
+};
+
 export const generateProjectPDF = (data: ExportData) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -90,12 +99,14 @@ export const generateProjectPDF = (data: ExportData) => {
     autoTable(doc, {
       startY: yPos,
       body: [
-        ['Description', s.description],
-        ['Actors', s.actors],
-        ['Pre-conditions', s.preconditions],
-        ['Post-conditions', s.postconditions],
-        ['Main Flow', s.mainFlow],
-        ['Alternative Flow', s.alternativeFlow],
+        ['Description', cleanText(s.description)],
+        ['Actors', cleanText(s.actors)],
+        ['Trigger', cleanText(s.trigger)],
+        ['Pre-conditions', cleanText(s.preconditions)],
+        ['Post-conditions', cleanText(s.postconditions)],
+        ['Main Flow', cleanText(s.mainFlow)],
+        ['Alternative Flow', cleanText(s.alternativeFlow)],
+        ['Exception Flow', cleanText(s.exceptionFlow)],
       ],
       theme: 'grid',
       columnStyles: { 0: { cellWidth: 35, fontStyle: 'bold', fillColor: [240, 240, 240] } },

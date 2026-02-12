@@ -1,5 +1,5 @@
 // src/types/storage.ts
-import type { ActorEntity, BackendUseCase, DiagramLink, DiagramNode, UseCaseDetail } from '../components/api';
+import type { ActorEntity, BackendUseCase, DiagramLink, DiagramNode, Step4Response, UseCaseDetail } from '../components/api';
 
 // Data for Step 1
 export interface Step1Data {
@@ -28,7 +28,7 @@ export interface Step3Data {
 }
 
 export interface Step4Data {
-  initial: { scenarios: UseCaseDetail[] };
+  initial: { scenarios: UseCaseDetail[]; initialResponse: Step4Response };
   final?: { scenarios: UseCaseDetail[] };
 }
 

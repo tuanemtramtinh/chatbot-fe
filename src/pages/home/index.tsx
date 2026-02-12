@@ -20,6 +20,7 @@ import {
   type DiagramLink,
   type Step4Request,
   type UseCaseDetail,
+  type RawScenarioResult,
 } from '../../components/api';
 import { storageService, type ProjectSession } from '../../utils/storage';
 import { DiagramWrapper } from '../../components/DiagramWrapper';
@@ -64,7 +65,10 @@ export default function HomePage() {
     setInputStoryText('');
     setActors([]);
     setUsecases([]);
+    setDiagramNodes([]);
+    setDiagramLinks([]);
     setUseCaseDetails({});
+    setSelectedUseCaseId(null);
   };
 
   // --- SESSION HELPERS ---
@@ -292,45 +296,89 @@ export default function HomePage() {
         final: { nodes: diagramNodes, links: diagramLinks },
       },
     };
-    console.log(step3FinalSession);
     storageService.saveSession(step3FinalSession);
     setCurrentSession(step3FinalSession);
 
     // 2. Prepare Payload
     const requestPayload: Step4Request = {
       thread_id: currentSession.id,
-      nodes: diagramNodes,
     };
     const stopLoading = antdMessage.loading({ content: 'Generating Scenarios...', key: 'gen_scenario', duration: 0 });
 
     try {
       // 3. Call API (This currently hits the Mock function in api.ts)
       const data = await apiService.generateScenarios(requestPayload);
+      // Create a temporary lookup map by Name
+      const scenarioByName = new Map<string, any>();
+      data.results.forEach((item: RawScenarioResult) => {
+        scenarioByName.set(item.use_case_spec_json.use_case_name.trim(), item);
+      });
 
-      if (data.interrupt?.type === 'review_scenarios') {
-        const generatedScenarios = data.interrupt.scenarios;
+      // Build the Final Map keyed by DIAGRAM NODE ID
+      const finalMap: Record<string, UseCaseDetail> = {};
 
-        // Convert Array to Map for easier lookup
-        const map: Record<string, UseCaseDetail> = {};
-        generatedScenarios.forEach((s) => (map[s.id] = s));
+      // We iterate over the DIAGRAM NODES. This ensures every node gets a mapped scenario.
+      diagramNodes.forEach((node) => {
+        if (node.category === 'Usecase') {
+          const rawItem = scenarioByName.get(node.label.trim());
 
-        // 4. Save Step 4 Initial
-        const step4Session: ProjectSession = {
-          ...step3FinalSession,
-          currentPhase: 'diagram-scenario-review',
-          step4: {
-            initial: { scenarios: generatedScenarios },
-            final: undefined,
-          },
-        };
-        console.log(step4Session);
-        storageService.saveSession(step4Session);
-        setCurrentSession(step4Session);
+          if (rawItem) {
+            const spec = rawItem.use_case_spec_json;
+            const evalData = rawItem.evaluation;
 
-        // 5. Update UI
-        setUseCaseDetails(map);
-        antdMessage.success({ content: 'Scenarios Generated!', key: 'gen_scenario', duration: 2 });
-      }
+            // Map it, but force the ID to match the Node Key
+            finalMap[String(node.key)] = {
+              id: String(node.key), // <--- CRITICAL: Sync ID with Node Key
+              name: spec.use_case_name,
+              actors: spec.primary_actors.join(', '),
+              description: spec.description,
+              trigger: spec.triggering_event,
+              preconditions: spec.preconditions.join('\n'),
+              postconditions: spec.postconditions.join('\n'),
+              mainFlow: spec.main_flow.join('\n'),
+              alternativeFlow: spec.alternative_flows.join('\n'),
+              exceptionFlow: spec.exception_flows.join('\n'),
+              scores: {
+                completeness: evalData.completeness.score,
+                correctness: evalData.correctness.score || 0,
+                relevance: evalData.relevance.score,
+              },
+            };
+          } else {
+            // Handle case where Node exists but AI didn't return a scenario for it
+            // (Create an empty placeholder so the UI doesn't crash)
+            finalMap[String(node.key)] = {
+              id: String(node.key),
+              name: node.label,
+              actors: '',
+              description: '',
+              trigger: '',
+              preconditions: '',
+              postconditions: '',
+              mainFlow: '',
+              alternativeFlow: '',
+              exceptionFlow: '',
+              scores: { completeness: 0, correctness: 0, relevance: 0 },
+            };
+          }
+        }
+      });
+
+      // 4. Save Step 4 Initial
+      const step4Session: ProjectSession = {
+        ...step3FinalSession,
+        currentPhase: 'diagram-scenario-review',
+        step4: {
+          initial: { scenarios: Object.values(finalMap), initialResponse: data },
+          final: undefined,
+        },
+      };
+      storageService.saveSession(step4Session);
+      setCurrentSession(step4Session);
+
+      // 5. Update UI
+      setUseCaseDetails(finalMap);
+      antdMessage.success({ content: 'Scenarios Generated!', key: 'gen_scenario', duration: 2 });
     } catch (e) {
       console.error(e);
       antdMessage.error({ content: 'Failed to generate scenarios', key: 'gen_scenario' });
@@ -348,14 +396,16 @@ export default function HomePage() {
         setUseCaseDetails((prev) => ({
           ...prev,
           [key]: {
-            id: key,
+            id: key as string,
             name: node.label,
             actors: '',
             description: '',
+            trigger: '',
             preconditions: '',
             postconditions: '',
             mainFlow: '',
             alternativeFlow: '',
+            exceptionFlow: '',
             scores: { completeness: 0, correctness: 0, relevance: 0 },
           },
         }));

@@ -1,75 +1,48 @@
-# React + TypeScript + Vite
+# Generative AI Use Case Diagram - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React/Vite application that leverages Generative AI to convert user stories into fully interactive Use Case Diagrams and detailed specifications.
 
-Currently, two official plugins are available:
+## 🚀 Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Step 1: Actor Extraction:** Analyzes raw user stories to identify primary and secondary actors.
+- **Step 2: Use Case Generation:** Generates use cases based on approved actors.
+- **Step 3: Interactive Diagram:** Visualizes the system using **GoJS**. Supports dragging, rearranging, and linking nodes.
+- **Step 4: Scenario Generation:** Generates detailed flows and scores for each use case.
+- **PDF Export:** Exports the final diagram and all specifications into a professional PDF report.
+- **Session Management:** Saves your progress locally so you can resume later.
 
-## React Compiler
+---
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+## 📦 Prerequisites
 
-Note: This will impact Vite dev & build performances.
+Ensure you have the following installed:
 
-## Expanding the ESLint configuration
+- [Node.js](https://nodejs.org/) (v18+ recommended)
+- npm or yarn
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## ⚙️ Installation
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+1.  **Clone the repository:**
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+    ```bash
+    git clone <your-repo-url>
+    cd <project-folder>
+    ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🔧 Configuration
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+By default, the frontend connects to a backend running on localhost port 8000.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+To change the backend URL, edit **`src/components/api.ts`**:
+
+```typescript
+// src/components/api.ts
+export const API_BASE_URL = '[http://127.0.0.1:8000](http://127.0.0.1:8000)'; // Change this if deploying
 ```

@@ -59,10 +59,12 @@ export const UseCaseDetailEditor = ({ data, onUpdate }: UseCaseDetailEditorProps
     { key: '1', field: 'Use Case Name', value: editingData.name, dataKey: 'name' },
     { key: '2', field: 'Primary Actor(s)', value: editingData.actors, dataKey: 'actors' },
     { key: '3', field: 'Description', value: editingData.description, dataKey: 'description' },
-    { key: '4', field: 'Pre-conditions', value: editingData.preconditions, dataKey: 'preconditions' },
-    { key: '5', field: 'Post-conditions', value: editingData.postconditions, dataKey: 'postconditions' },
-    { key: '6', field: 'Main Flow', value: editingData.mainFlow, dataKey: 'mainFlow' },
-    { key: '7', field: 'Alternative Flows', value: editingData.alternativeFlow, dataKey: 'alternativeFlow' },
+    { key: '4', field: 'Trigger', value: editingData.trigger, dataKey: 'trigger' },
+    { key: '5', field: 'Pre-conditions', value: editingData.preconditions, dataKey: 'preconditions' },
+    { key: '6', field: 'Post-conditions', value: editingData.postconditions, dataKey: 'postconditions' },
+    { key: '7', field: 'Main Flow', value: editingData.mainFlow, dataKey: 'mainFlow' },
+    { key: '8', field: 'Alternative Flows', value: editingData.alternativeFlow, dataKey: 'alternativeFlow' },
+    { key: '9', field: 'Exception Flows', value: editingData.exceptionFlow, dataKey: 'exceptionFlow' },
   ];
 
   const columns = [
